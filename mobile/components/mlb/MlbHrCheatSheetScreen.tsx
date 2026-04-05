@@ -14,14 +14,17 @@ import {
   useMlbHrCheatSheet,
   useMlbCheatSheetBatterDetail,
   useCheatSheetBatchPreFetch,
+  useMlbUpcomingGames,
   type CheatSheetBatter,
   type CheatSheetBatterDetail,
+  type MlbUpcomingGame,
 } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
-import { usePropBetslip, type PropSlipItem } from "@/store/usePropBetslip";
+import { usePropBetslip } from "@/store/usePropBetslip";
 import { buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
 import { formatET } from "@/lib/time/formatET";
+import { HrMatchupGameContent } from "./MlbHrMatchupScreen";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -510,9 +513,233 @@ function GradeSection({
   );
 }
 
-// ── Main cheat sheet screen ────────────────────────────────────────────────
+// ── Collapsible game panel for HR Matchups tab ───────────────────────────────
+
+function HrMatchupGamePanel({
+  game,
+  selectedKeys,
+  onToggleSelect,
+}: {
+  game: MlbUpcomingGame;
+  selectedKeys: Set<string>;
+  onToggleSelect: (batterId: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const awayLogo = getMlbTeamLogo(game.away_team ?? "Away") ?? undefined;
+  const homeLogo = getMlbTeamLogo(game.home_team ?? "Home") ?? undefined;
+
+  return (
+    <View style={st.matchupGamePanel}>
+      <Pressable style={st.matchupGameHeader} onPress={() => setExpanded((e) => !e)}>
+        <View style={st.matchupGameTeams}>
+          {awayLogo ? <Image source={{ uri: awayLogo }} style={st.matchupGameLogo} /> : null}
+          <Text style={st.matchupGameTeamText}>{game.away_team ?? "Away"}</Text>
+          <Text style={st.matchupGameAt}>@</Text>
+          {homeLogo ? <Image source={{ uri: homeLogo }} style={st.matchupGameLogo} /> : null}
+          <Text style={st.matchupGameTeamText}>{game.home_team ?? "Home"}</Text>
+        </View>
+        <View style={st.matchupGameMeta}>
+          <Text style={st.matchupGameTime}>{formatET(game.start_time_utc ?? null)} ET</Text>
+          {game.venue_name ? <Text style={st.matchupGameVenue}>{game.venue_name}</Text> : null}
+          <Text style={st.matchupGameChevron}>{expanded ? "▾" : "▸"}</Text>
+        </View>
+      </Pressable>
+      {expanded ? (
+        <View style={st.matchupGameBody}>
+          <HrMatchupGameContent
+            gamePk={game.game_pk}
+            selectedKeys={selectedKeys}
+            onToggleSelect={onToggleSelect}
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ── HR Matchups all-games view ──────────────────────────────────────────────
+
+function HrMatchupsAllGames() {
+  const { colors } = useTheme();
+  const { data: games, loading, error, refetch } = useMlbUpcomingGames();
+  const platform = getBuildPlatform();
+
+  const slipItems = usePropBetslip((s) => s.items);
+  const addToSlip = usePropBetslip((s) => s.add);
+  const removeFromSlip = usePropBetslip((s) => s.remove);
+  const clearSlip = usePropBetslip((s) => s.clear);
+
+  const selectedKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of slipItems) {
+      if (item.sport === "mlb" && item.market === "MLB 1+ HR") {
+        keys.add(String(item.player_id));
+      }
+    }
+    return keys;
+  }, [slipItems]);
+
+  const toggleSelect = useCallback(
+    (batterId: string) => {
+      const slipId = `mlb-hr-${batterId}`;
+      if (slipItems.some((i) => i.id === slipId)) {
+        removeFromSlip(slipId);
+      } else if (slipItems.length < 10) {
+        addToSlip({
+          id: slipId,
+          player_id: Number(batterId),
+          player: batterId,
+          market: "MLB 1+ HR",
+          side: "over",
+          line: 0.5,
+          odds: 100,
+          sport: "mlb",
+          bookmaker: null,
+          fd_market_id: null,
+          fd_selection_id: null,
+        });
+      }
+    },
+    [slipItems, addToSlip, removeFromSlip]
+  );
+
+  const mlbSlipItems = useMemo(
+    () => slipItems.filter((i) => i.sport === "mlb" && i.market === "MLB 1+ HR"),
+    [slipItems]
+  );
+
+  const fdLink = useMemo(() => {
+    if (mlbSlipItems.length === 0) return null;
+    return buildFanDuelParlay(
+      mlbSlipItems.map((i) => ({
+        fd_market_id: i.fd_market_id ?? null,
+        fd_selection_id: i.fd_selection_id ?? null,
+      })),
+      platform
+    );
+  }, [mlbSlipItems, platform]);
+
+  function openUrl(url?: string | null) {
+    if (!url) return;
+    if (platform === "desktop" && typeof globalThis.open === "function") {
+      globalThis.open(url, "_blank");
+      return;
+    }
+    Linking.openURL(url).catch(() => {});
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <ScrollView style={st.scrollView} contentContainerStyle={st.content}>
+        <View style={[st.hero, { borderColor: colors.border.subtle }]}>
+          <Text style={st.eyebrow}>HR MATCHUP — BATTER vs PITCH MIX</Text>
+          <Text style={st.h1}>All Games</Text>
+          <Text style={st.sub}>
+            Tap a game to expand its matchup data. Each pitcher shows batter stats filtered by pitch type.
+          </Text>
+        </View>
+
+        {loading ? <ActivityIndicator color="#93C5FD" /> : null}
+
+        {error ? (
+          <Pressable onPress={refetch} style={[st.errorBox, { borderColor: colors.border.subtle }]}>
+            <Text style={st.errorTitle}>Failed to load games.</Text>
+            <Text style={st.errorText}>{error}</Text>
+            <Text style={st.errorRetry}>Tap to retry</Text>
+          </Pressable>
+        ) : null}
+
+        {(games ?? []).map((game) => (
+          <HrMatchupGamePanel
+            key={game.game_pk}
+            game={game}
+            selectedKeys={selectedKeys}
+            onToggleSelect={toggleSelect}
+          />
+        ))}
+
+        {!loading && !error && !(games?.length) ? (
+          <View style={[st.emptyCard, { borderColor: colors.border.subtle }]}>
+            <Text style={st.emptyTitle}>No MLB games today.</Text>
+            <Text style={st.emptyText}>Check back when games are scheduled.</Text>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      {/* Fixed bottom parlay bar */}
+      {mlbSlipItems.length >= 1 ? (
+        <View style={st.parlayBar}>
+          <View style={st.parlayTopRow}>
+            <Text style={st.parlayTitle}>
+              {mlbSlipItems.length} batter{mlbSlipItems.length !== 1 ? "s" : ""} selected
+            </Text>
+            <Pressable onPress={clearSlip}>
+              <Text style={st.parlayClear}>✕</Text>
+            </Pressable>
+          </View>
+          <View style={st.parlayLegs}>
+            {mlbSlipItems.map((item) => (
+              <Text key={item.id} style={st.parlayLegText}>
+                • {item.player} — 1+ HR {fmtOdds(item.odds)}
+              </Text>
+            ))}
+          </View>
+          <View style={st.parlayBtnRow}>
+            <Pressable
+              style={[st.parlayBtn, !fdLink ? st.parlayBtnDisabled : null]}
+              disabled={!fdLink}
+              onPress={() => openUrl(fdLink)}
+            >
+              <Text style={st.parlayBtnText}>
+                {mlbSlipItems.length === 1 ? "Bet FanDuel" : `Parlay on FanDuel (${mlbSlipItems.length} legs)`}
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={st.parlayNote}>Parlay availability subject to sportsbook approval.</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ── Main cheat sheet screen (with subtabs) ─────────────────────────────────
+
+type SubTab = "cheat-sheet" | "hr-matchups";
 
 export function MlbHrCheatSheetScreen() {
+  const [subTab, setSubTab] = useState<SubTab>("cheat-sheet");
+
+  return (
+    <View style={st.screen}>
+      {/* Subtab bar */}
+      <View style={st.subTabBar}>
+        <Pressable
+          style={[st.subTab, subTab === "cheat-sheet" ? st.subTabActive : st.subTabInactive]}
+          onPress={() => setSubTab("cheat-sheet")}
+        >
+          <Text style={subTab === "cheat-sheet" ? st.subTabTextActive : st.subTabTextInactive}>
+            Cheat Sheet
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[st.subTab, subTab === "hr-matchups" ? st.subTabActive : st.subTabInactive]}
+          onPress={() => setSubTab("hr-matchups")}
+        >
+          <Text style={subTab === "hr-matchups" ? st.subTabTextActive : st.subTabTextInactive}>
+            HR Matchups
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Content */}
+      {subTab === "cheat-sheet" ? <CheatSheetContent /> : <HrMatchupsAllGames />}
+    </View>
+  );
+}
+
+// ── Cheat sheet content (original) ─────────────────────────────────────────
+
+function CheatSheetContent() {
   const { colors } = useTheme();
   const { data, loading, error, refetch } = useMlbHrCheatSheet();
   const platform = getBuildPlatform();
@@ -661,7 +888,7 @@ export function MlbHrCheatSheetScreen() {
   }
 
   return (
-    <View style={st.screen}>
+    <View style={{ flex: 1 }}>
       <ScrollView style={st.scrollView} contentContainerStyle={st.content}>
         <View style={[st.hero, { borderColor: colors.border.subtle }]}>
           <Text style={st.eyebrow}>MLB HR CHEAT SHEET</Text>
@@ -799,6 +1026,49 @@ const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
   scrollView: { flex: 1 },
   content: { padding: 16, gap: 10, paddingBottom: 40 },
+
+  // Subtab bar
+  subTabBar: {
+    flexDirection: "row",
+    backgroundColor: "#0B1529",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#1E293B",
+  },
+  subTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderBottomWidth: 2,
+  },
+  subTabActive: { borderBottomColor: "#10B981" },
+  subTabInactive: { borderBottomColor: "transparent" },
+  subTabTextActive: { color: "#10B981", fontSize: 12, fontWeight: "800" },
+  subTabTextInactive: { color: "#64748B", fontSize: 12, fontWeight: "700" },
+
+  // Matchup game panels
+  matchupGamePanel: {
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    borderRadius: 12,
+    backgroundColor: "#0B1529",
+    overflow: "hidden",
+  },
+  matchupGameHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    gap: 8,
+  },
+  matchupGameTeams: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
+  matchupGameLogo: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#111827" },
+  matchupGameTeamText: { color: "#CBD5E1", fontSize: 14, fontWeight: "800" },
+  matchupGameAt: { color: "#475569", fontSize: 12, fontWeight: "700" },
+  matchupGameMeta: { flexDirection: "row", alignItems: "center", gap: 6 },
+  matchupGameTime: { color: "#93C5FD", fontSize: 11, fontWeight: "700" },
+  matchupGameVenue: { color: "#64748B", fontSize: 10 },
+  matchupGameChevron: { color: "#64748B", fontSize: 14 },
+  matchupGameBody: { padding: 8, gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#1E293B" },
 
   // Hero
   hero: {

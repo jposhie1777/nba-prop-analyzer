@@ -88,7 +88,7 @@ export function MlbUpcomingGamesScreen() {
             key={String(gamePk)}
             onPress={() =>
               router.push({
-                pathname: "/(tabs)/mlb/hr-matchup/[gamePk]" as any,
+                pathname: "/(tabs)/mlb/pitching-props/[gamePk]" as any,
                 params: {
                   gamePk: String(gamePk),
                   homeTeam: home,

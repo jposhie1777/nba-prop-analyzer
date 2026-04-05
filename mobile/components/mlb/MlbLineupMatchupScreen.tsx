@@ -58,12 +58,6 @@ export function MlbLineupMatchupScreen() {
       {/* ── Sub-tab indicator ── */}
       <View style={s.tabRow}>
         <Pressable
-          onPress={() => router.push({ pathname: "/(tabs)/mlb/hr-matchup/[gamePk]" as any, params: { gamePk: String(gamePk), homeTeam: homeTeamName, awayTeam: awayTeamName } })}
-          style={s.tabInactive}
-        >
-          <Text style={s.tabTextInactive}>HR Matchup</Text>
-        </Pressable>
-        <Pressable
           onPress={() => router.push({ pathname: "/(tabs)/mlb/pitching-props/[gamePk]" as any, params: { gamePk: String(gamePk), homeTeam: homeTeamName, awayTeam: awayTeamName } })}
           style={s.tabInactive}
         >

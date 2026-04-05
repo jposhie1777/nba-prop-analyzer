@@ -9,19 +9,18 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   useMlbMatchupDetail,
   useMlbBattingOrder,
   type MlbBatterPick,
-  type MlbPitcherGroup,
   type MlbPitchMixRow,
   type MlbBatterVsPitchRow,
 } from "@/hooks/mlb/useMlbMatchups";
 import { useTheme } from "@/store/useTheme";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
-import { usePropBetslip, type PropSlipItem } from "@/store/usePropBetslip";
+import { usePropBetslip } from "@/store/usePropBetslip";
 import { buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
@@ -300,12 +299,11 @@ function formatResult(result?: string | null): string {
   return result.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ── Single batter card ──────────────────────────────────────────────────────
+// ── Single batter row ───────────────────────────────────────────────────────
 
-function BatterCard({
+function BatterRow({
   batter,
   stats,
-  pitcherName,
   expanded,
   onToggleExpand,
   selected,
@@ -314,7 +312,6 @@ function BatterCard({
 }: {
   batter: MlbBatterPick;
   stats: AggregatedStats;
-  pitcherName: string;
   expanded: boolean;
   onToggleExpand: () => void;
   selected: boolean;
@@ -325,92 +322,56 @@ function BatterCard({
   const bvp = batter.bvp_career;
   const hasBvp = bvp != null && (bvp.pa ?? 0) > 0;
   const hasFd = !!(batter.fd_market_id && batter.fd_selection_id);
-  const grade = normalizeGrade(batter.grade);
-  const gradeLabel = grade === "IDEAL" ? "Ideal Target" : grade === "FAVORABLE" ? "Favorable" : grade === "AVOID" ? "Avoid" : "Average";
 
   return (
-    <View style={[s.card, selected ? s.cardSelected : null, isWeakSpot ? s.cardWeakSpot : null]}>
-      {/* Header: name + odds + grade badge */}
-      <Pressable onPress={onToggleExpand} style={s.cardHeader}>
-        <View style={s.cardNameRow}>
-          <Text style={s.cardName} numberOfLines={1}>
-            {isWeakSpot ? "🎯 " : ""}{batter.batter_name ?? "—"}
+    <View style={[
+      s.batterRowWrap,
+      selected ? s.batterRowSelected : null,
+      isWeakSpot ? s.batterRowWeakSpot : null,
+    ]}>
+      <View style={s.batterRow}>
+        {/* Select box */}
+        <Pressable
+          style={[s.selectBox, selected ? s.selectBoxActive : null, !hasFd ? s.selectBoxDisabled : null]}
+          onPress={hasFd ? onToggleSelect : undefined}
+        >
+          <Text style={[s.selectBoxText, selected ? s.selectBoxTextActive : null]}>
+            {selected ? "✓" : "+"}
           </Text>
-          <Text style={s.cardHand}>{handLabel(batter.bat_side)}</Text>
-          <Text style={s.cardOdds}>{fmtOdds(batter.hr_odds_best_price)}</Text>
-        </View>
-        <View style={s.cardSubRow}>
-          <View style={[s.gradePill, { backgroundColor: tone.bg, borderColor: tone.border }]}>
-            <Text style={[s.gradePillText, { color: tone.text }]}>{gradeLabel}</Text>
+        </Pressable>
+
+        {/* Chevron + player info */}
+        <Pressable style={s.batterInfoCol} onPress={onToggleExpand}>
+          <Text style={s.chevron}>{expanded ? "▾" : "▸"}</Text>
+          <View style={[s.gradeChip, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+            <Text style={[s.gradeChipText, { color: tone.text }]}>{tone.short}</Text>
           </View>
-          {batter.hr_odds_best_book ? (
-            <Text style={s.cardBook}>{batter.hr_odds_best_book}</Text>
-          ) : null}
-        </View>
-      </Pressable>
+          <View style={s.nameWrap}>
+            <Text style={s.batterName} numberOfLines={1}>
+              {isWeakSpot ? "🎯 " : ""}{batter.batter_name ?? "—"}
+            </Text>
+            <Text style={s.batterMeta}>
+              {handLabel(batter.bat_side)}{isWeakSpot ? " · WEAK SPOT" : ""}
+            </Text>
+          </View>
+        </Pressable>
 
-      {/* Big stat numbers */}
-      <View style={s.cardStatsRow}>
-        <View style={s.cardBigStat}>
-          <Text style={[s.cardBigNum, greenTone("avg", stats.avg)]}>{fmt(stats.avg)}</Text>
-          <Text style={s.cardBigLabel}>AVG</Text>
-        </View>
-        <View style={s.cardBigStat}>
-          <Text style={[s.cardBigNum, greenTone("iso", stats.iso)]}>{fmt(stats.iso)}</Text>
-          <Text style={s.cardBigLabel}>ISO</Text>
-        </View>
+        {/* Scrollable stat cells */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.statsScroll}>
+          <View style={s.statsRow}>
+            <Text style={[s.statCell, greenTone("avg", stats.avg)]}>{fmt(stats.avg)}</Text>
+            <Text style={[s.statCell, greenTone("iso", stats.iso)]}>{fmt(stats.iso)}</Text>
+            <Text style={[s.statCell, greenTone("barrel_pct", stats.barrel_pct_l15)]}>{fmtPct(stats.barrel_pct_l15)}</Text>
+            <Text style={[s.statCell, greenTone("hh_pct", stats.hh_pct)]}>{fmtPct(stats.hh_pct)}</Text>
+            <Text style={[s.statCell, greenTone("slg", stats.slg)]}>{fmt(stats.slg)}</Text>
+          </View>
+        </ScrollView>
       </View>
-
-      {/* Secondary stats row */}
-      <View style={s.cardSecondaryRow}>
-        <View style={s.cardSmStat}>
-          <Text style={[s.cardSmNum, greenTone("barrel_pct", stats.barrel_pct_l15)]}>{fmtPct(stats.barrel_pct_l15)}</Text>
-          <Text style={s.cardSmLabel}>Barrel%</Text>
-        </View>
-        <View style={s.cardSmStat}>
-          <Text style={[s.cardSmNum, greenTone("hh_pct", stats.hh_pct)]}>{fmtPct(stats.hh_pct)}</Text>
-          <Text style={s.cardSmLabel}>HH%</Text>
-        </View>
-        <View style={s.cardSmStat}>
-          <Text style={[s.cardSmNum, greenTone("slg", stats.slg)]}>{fmt(stats.slg)}</Text>
-          <Text style={s.cardSmLabel}>SLG</Text>
-        </View>
-      </View>
-
-      {/* BvP summary line */}
-      {hasBvp ? (
-        <Text style={s.cardBvpLine} numberOfLines={2}>
-          BvP: {bvp!.hits ?? 0} PA vs {pitcherName}: SLG {fmt(bvp!.slg)} · ISO {fmt(bvp!.iso)} · Avg{"\u200A"}{fmt(bvp!.avg)} · {bvp!.hr ?? 0} HR
-        </Text>
-      ) : null}
-
-      {/* Barrel/stat detail line */}
-      <Text style={s.cardDetailLine} numberOfLines={2}>
-        Barrel% {fmtPct(stats.barrel_pct_l15)} · HR/FB% {fmtPct(batter.hr_fb_pct)} · {hasBvp ? `Statcast: Avg{"\u200A"}${fmt(stats.avg)}` : `SLG ${fmt(stats.slg)}`}
-      </Text>
-
-      {/* Flags */}
-      {(batter.flags?.length ?? 0) > 0 ? (
-        <View style={s.cardFlagsRow}>
-          {batter.flags!.map((flag, i) => (
-            <Text key={i} style={s.cardFlag} numberOfLines={1}>{flag}</Text>
-          ))}
-        </View>
-      ) : null}
-
-      {/* Select / FD button */}
-      <Pressable
-        style={[s.cardSelectBtn, selected ? s.cardSelectBtnActive : null, !hasFd ? s.cardSelectBtnDisabled : null]}
-        onPress={hasFd ? onToggleSelect : undefined}
-      >
-        <Text style={[s.cardSelectBtnText, selected ? s.cardSelectBtnTextActive : null]}>
-          {selected ? "✓ Selected" : "+ Add to Parlay"}
-        </Text>
-      </Pressable>
 
       {/* Expanded: Career BvP + Batted Ball Profile + Hit Log */}
       {expanded ? (
         <View style={s.expandedArea}>
+          {/* ── Career BvP stats ── */}
           <Text style={s.expandedTitle}>Career vs Pitcher</Text>
           {hasBvp ? (
             <View style={s.bvpWrap}>
@@ -441,6 +402,8 @@ function BatterCard({
           ) : (
             <Text style={s.bvpEmpty}>No career data vs this pitcher</Text>
           )}
+
+          {/* ── Batted Ball Profile ── */}
           <BattedBallProfile batter={batter} />
         </View>
       ) : null}
@@ -455,7 +418,6 @@ function HandednessSection({
   batters,
   pitcherMix,
   pitcherHand,
-  pitcherName,
   selectedKeys,
   onToggleSelect,
   weakSpotIds,
@@ -464,7 +426,6 @@ function HandednessSection({
   batters: MlbBatterPick[];
   pitcherMix: MlbPitchMixRow[];
   pitcherHand: string;
-  pitcherName: string;
   selectedKeys: Set<string>;
   onToggleSelect: (key: string) => void;
   weakSpotIds: Set<number>;
@@ -523,30 +484,150 @@ function HandednessSection({
         </ScrollView>
       ) : null}
 
-      {/* Batter cards in 2-column grid */}
-      <View style={s.cardGrid}>
-        {batters.map((batter) => {
-          const batterId = String(batter.batter_id ?? batter.batter_name ?? "");
-          const pitchRows: MlbBatterVsPitchRow[] =
-            (batter as any).hitter_stats_vs_pitches?.[hitterStatsKey] ?? [];
-          const stats = aggregateStatsForPitches(pitchRows, selectedPitches, batter);
-
-          return (
-            <BatterCard
-              key={batterId}
-              batter={batter}
-              stats={stats}
-              pitcherName={pitcherName}
-              expanded={expandedIds.has(batterId)}
-              onToggleExpand={() => toggleExpand(batterId)}
-              selected={selectedKeys.has(batterId)}
-              onToggleSelect={() => onToggleSelect(batterId)}
-              isWeakSpot={batter.batter_id != null && weakSpotIds.has(batter.batter_id)}
-            />
-          );
-        })}
+      {/* Column headers */}
+      <View style={s.headerRow}>
+        <View style={s.headerInfoCol}>
+          <Text style={s.headerText}>PLAYER</Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.statsScroll}>
+          <View style={s.statsRow}>
+            <Text style={s.headerCell}>AVG</Text>
+            <Text style={s.headerCell}>ISO</Text>
+            <Text style={s.headerCell}>BRL%</Text>
+            <Text style={s.headerCell}>HH%</Text>
+            <Text style={s.headerCell}>SLG</Text>
+          </View>
+        </ScrollView>
       </View>
+
+      {/* Batter rows */}
+      {batters.map((batter) => {
+        const batterId = String(batter.batter_id ?? batter.batter_name ?? "");
+        const pitchRows: MlbBatterVsPitchRow[] =
+          (batter as any).hitter_stats_vs_pitches?.[hitterStatsKey] ?? [];
+        const stats = aggregateStatsForPitches(pitchRows, selectedPitches, batter);
+
+        return (
+          <BatterRow
+            key={batterId}
+            batter={batter}
+            stats={stats}
+            expanded={expandedIds.has(batterId)}
+            onToggleExpand={() => toggleExpand(batterId)}
+            selected={selectedKeys.has(batterId)}
+            onToggleSelect={() => onToggleSelect(batterId)}
+            isWeakSpot={batter.batter_id != null && weakSpotIds.has(batter.batter_id)}
+          />
+        );
+      })}
     </View>
+  );
+}
+
+// ── Reusable game content (pitcher panels + batter rows) ───────────────────
+
+export function HrMatchupGameContent({
+  gamePk,
+  selectedKeys,
+  onToggleSelect,
+}: {
+  gamePk: number;
+  selectedKeys: Set<string>;
+  onToggleSelect: (batterId: string) => void;
+}) {
+  const { colors } = useTheme();
+  const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
+  const { data: boData } = useMlbBattingOrder(Number.isFinite(gamePk) ? gamePk : null);
+
+  const weakSpotMap = useMemo(() => {
+    const map = new Map<number, Set<number>>();
+    for (const pitcher of boData?.pitchers ?? []) {
+      const pid = pitcher.pitcher_id;
+      if (pid == null) continue;
+      const weakIds = new Set<number>();
+      for (const pos of pitcher.positions ?? []) {
+        if (pos.is_weak_spot && pos.player_id != null) {
+          weakIds.add(pos.player_id);
+        }
+      }
+      map.set(pid, weakIds);
+    }
+    return map;
+  }, [boData]);
+
+  if (loading) return <ActivityIndicator color="#93C5FD" />;
+
+  if (error) {
+    return (
+      <Pressable onPress={refetch} style={[s.errorBox, { borderColor: colors.border.subtle }]}>
+        <Text style={s.errorTitle}>Failed to load matchup.</Text>
+        <Text style={s.errorText}>{error}</Text>
+        <Text style={s.errorRetry}>Tap to retry</Text>
+      </Pressable>
+    );
+  }
+
+  if (!(data?.pitchers?.length)) {
+    return (
+      <View style={[s.panel, { borderColor: colors.border.subtle }]}>
+        <Text style={s.emptyTitle}>No MLB model data for this game yet.</Text>
+        <Text style={s.emptyText}>Data will populate once the model run completes.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {data.pitchers.map((pitcher) => {
+        const batters = dedupeBatters(pitcher.batters ?? []).slice(0, 12);
+        const pitcherHandRaw = (pitcher.pitcher_hand ?? "R").toUpperCase();
+        const mixVsRhb = pitcher.pitch_mix?.vs_rhb ?? [];
+        const mixVsLhb = pitcher.pitch_mix?.vs_lhb ?? [];
+
+        const rhBatters = batters.filter((b) => {
+          const side = (b.bat_side ?? "").toUpperCase();
+          return side === "R" || side === "S";
+        });
+        const lhBatters = batters.filter((b) => {
+          const side = (b.bat_side ?? "").toUpperCase();
+          return side === "L" || side === "S";
+        });
+
+        return (
+          <View key={String(pitcher.pitcher_id)} style={[s.panel, { borderColor: colors.border.subtle }]}>
+            <Text style={s.sectionEyebrow}>{pitcher.offense_team ?? "OFFENSE"} HITTERS</Text>
+            <Text style={s.sectionTitle}>
+              vs {pitcher.pitcher_name ?? "Pitcher"}{" "}
+              <Text style={s.sectionHand}>{pitcherHandRaw}</Text>
+            </Text>
+
+            <HandednessSection
+              label={`vs RHB · ${pitcher.pitcher_name ?? "Pitcher"} Pitch Mix`}
+              batters={rhBatters}
+              pitcherMix={mixVsRhb}
+              pitcherHand={pitcherHandRaw}
+              selectedKeys={selectedKeys}
+              onToggleSelect={onToggleSelect}
+              weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
+            />
+
+            <HandednessSection
+              label={`vs LHB · ${pitcher.pitcher_name ?? "Pitcher"} Pitch Mix`}
+              batters={lhBatters}
+              pitcherMix={mixVsLhb}
+              pitcherHand={pitcherHandRaw}
+              selectedKeys={selectedKeys}
+              onToggleSelect={onToggleSelect}
+              weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
+            />
+
+            {!batters.length ? (
+              <Text style={s.emptyText}>No hitter data for this pitcher.</Text>
+            ) : null}
+          </View>
+        );
+      })}
+    </>
   );
 }
 
@@ -681,9 +762,6 @@ export function MlbHrMatchupScreen() {
 
       {/* ── Sub-tab indicator ── */}
       <View style={s.tabRow}>
-        <View style={s.tabActive}>
-          <Text style={s.tabTextActive}>HR Matchup</Text>
-        </View>
         <Pressable
           onPress={() =>
             router.push({
@@ -788,7 +866,6 @@ export function MlbHrMatchupScreen() {
               batters={rhBatters}
               pitcherMix={mixVsRhb}
               pitcherHand={pitcherHandRaw}
-              pitcherName={pitcher.pitcher_name ?? "Pitcher"}
               selectedKeys={selectedKeys}
               onToggleSelect={toggleSelect}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
@@ -799,7 +876,6 @@ export function MlbHrMatchupScreen() {
               batters={lhBatters}
               pitcherMix={mixVsLhb}
               pitcherHand={pitcherHandRaw}
-              pitcherName={pitcher.pitcher_name ?? "Pitcher"}
               selectedKeys={selectedKeys}
               onToggleSelect={toggleSelect}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
@@ -861,6 +937,8 @@ export function MlbHrMatchupScreen() {
 }
 
 // ── Styles ──────────────────────────────────────────────────────────────────
+
+const STAT_CELL_W = 58;
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
@@ -938,98 +1016,104 @@ const s = StyleSheet.create({
   pitchToggleTextActive: { color: "#A7F3D0" },
   pitchTogglePct: { color: "#64748B", fontSize: 10, fontWeight: "600" },
 
+  // Header row
+  headerRow: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#334155",
+    paddingBottom: 4,
+    marginBottom: 2,
+  },
+  headerInfoCol: { width: 136, paddingLeft: 26 },
+  headerText: { color: "#64748B", fontSize: 9, fontWeight: "800" },
+  headerCell: {
+    width: STAT_CELL_W,
+    color: "#64748B",
+    fontSize: 9,
+    fontWeight: "800",
+    textAlign: "center",
+  },
 
-  // Card grid
-  cardGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 4,
-  },
-  card: {
-    width: "48%",
-    borderWidth: 1,
-    borderColor: "#1E293B",
-    borderRadius: 12,
-    backgroundColor: "#0B1529",
-    padding: 10,
-    gap: 6,
-  } as any,
-  cardSelected: {
-    borderColor: "#10B981",
-    backgroundColor: "rgba(16,185,129,0.06)",
-  },
-  cardWeakSpot: {
-    borderLeftWidth: 3,
-    borderLeftColor: "#10B981",
-  },
-  cardHeader: { gap: 3 },
-  cardNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  cardName: { color: "#E5E7EB", fontSize: 13, fontWeight: "800", flex: 1 },
-  cardHand: { color: "#64748B", fontSize: 10, fontWeight: "700" },
-  cardOdds: { color: "#F59E0B", fontSize: 12, fontWeight: "800" },
-  cardSubRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  gradePill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  gradePillText: { fontSize: 9, fontWeight: "800" },
-  cardBook: { color: "#64748B", fontSize: 9, fontWeight: "600" },
-  cardStatsRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 2,
-  },
-  cardBigStat: { alignItems: "center" },
-  cardBigNum: { color: "#F8FAFC", fontSize: 22, fontWeight: "900" },
-  cardBigLabel: { color: "#64748B", fontSize: 9, fontWeight: "700" },
-  cardSecondaryRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  cardSmStat: { alignItems: "center", flex: 1 },
-  cardSmNum: { color: "#CBD5E1", fontSize: 13, fontWeight: "800" },
-  cardSmLabel: { color: "#64748B", fontSize: 8, fontWeight: "700" },
-  cardBvpLine: { color: "#94A3B8", fontSize: 9, fontWeight: "600", lineHeight: 13 },
-  cardDetailLine: { color: "#64748B", fontSize: 9, fontWeight: "600", lineHeight: 13 },
-  cardFlagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 3 },
-  cardFlag: { color: "#F59E0B", fontSize: 8, fontWeight: "700" },
-  cardSelectBtn: {
+  // Select box
+  selectBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: "#334155",
-    borderRadius: 6,
-    paddingVertical: 5,
-    alignItems: "center",
     backgroundColor: "#0F172A",
-    marginTop: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 2,
   },
-  cardSelectBtnActive: {
+  selectBoxActive: {
     borderColor: "#10B981",
-    backgroundColor: "rgba(16,185,129,0.15)",
+    backgroundColor: "rgba(16,185,129,0.2)",
   },
-  cardSelectBtnDisabled: { opacity: 0.3 },
-  cardSelectBtnText: { color: "#64748B", fontSize: 10, fontWeight: "700" },
-  cardSelectBtnTextActive: { color: "#10B981" },
+  selectBoxDisabled: { opacity: 0.3 },
+  selectBoxText: { color: "#64748B", fontSize: 12, fontWeight: "800" },
+  selectBoxTextActive: { color: "#10B981" },
 
+  // Batter row
+  batterRowWrap: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(51,65,85,0.5)",
+  },
+  batterRowSelected: {
+    backgroundColor: "rgba(16,185,129,0.06)",
+  },
+  batterRowWeakSpot: {
+    borderLeftWidth: 2,
+    borderLeftColor: "#10B981",
+  },
+  batterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 36,
+  },
+  batterInfoCol: {
+    width: 110,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingLeft: 2,
+    paddingVertical: 4,
+  },
+  chevron: { color: "#64748B", fontSize: 11, width: 14 },
+  gradeChip: {
+    borderWidth: 1,
+    borderRadius: 4,
+    width: 22,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gradeChipText: { fontSize: 9, fontWeight: "900" },
+  nameWrap: { flex: 1, gap: 0 },
+  batterName: { color: "#E5E7EB", fontSize: 11, fontWeight: "700" },
+  batterMeta: { color: "#64748B", fontSize: 9, fontWeight: "600" },
+
+  // Stats
+  statsScroll: { flex: 1 },
+  statsRow: { flexDirection: "row" },
+  statCell: {
+    width: STAT_CELL_W,
+    color: "#E2E8F0",
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
+    paddingVertical: 6,
+  },
   cellGreen: { color: "#34D399" },
 
   // Expanded
   expandedArea: {
-    paddingTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: "rgba(15,23,42,0.4)",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#1E293B",
     gap: 6,
-    marginTop: 4,
   },
   expandedTitle: { color: "#94A3B8", fontSize: 10, fontWeight: "800" },
   bvpWrap: { gap: 4 },

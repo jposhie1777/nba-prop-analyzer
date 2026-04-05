@@ -203,9 +203,12 @@ function HandednessSection({
   pitcherHand: string;
   weakSpotIds: Set<number>;
 }) {
-  const [selectedPitches, setSelectedPitches] = useState<Set<string>>(
-    () => new Set(pitcherMix.map((r) => normPitch(r.pitch_name)))
-  );
+  const [selectedPitches, setSelectedPitches] = useState<Set<string>>(() => {
+    const over25 = pitcherMix.filter((r) => (r.pitch_pct ?? 0) >= 25);
+    // Fall back to all pitches if none meet the threshold
+    const selected = over25.length > 0 ? over25 : pitcherMix;
+    return new Set(selected.map((r) => normPitch(r.pitch_name)));
+  });
 
   const togglePitch = (pitchName: string) => {
     setSelectedPitches((prev) => {

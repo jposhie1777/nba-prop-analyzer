@@ -47,53 +47,59 @@ function handLabel(side?: string | null): string {
   return "RHB";
 }
 
-function normalizeGrade(grade?: string | null): "IDEAL" | "FAVORABLE" | "AVERAGE" | "AVOID" {
-  const g = (grade ?? "").toUpperCase();
-  if (g === "IDEAL") return "IDEAL";
-  if (g === "FAVORABLE") return "FAVORABLE";
-  if (g === "AVOID") return "AVOID";
-  return "AVERAGE";
-}
-
-function gradeTone(grade?: string | null) {
-  const g = normalizeGrade(grade);
-  if (g === "IDEAL") return { border: "#10B981", bg: "rgba(16,185,129,0.12)", text: "#A7F3D0", short: "A+" };
-  if (g === "FAVORABLE") return { border: "#22D3EE", bg: "rgba(34,211,238,0.12)", text: "#CFFAFE", short: "A" };
-  if (g === "AVOID") return { border: "#EF4444", bg: "rgba(239,68,68,0.12)", text: "#FECACA", short: "D" };
-  return { border: "#F59E0B", bg: "rgba(245,158,11,0.12)", text: "#FDE68A", short: "B" };
-}
-
-// Green shading for good batter values (no red per user request)
-function greenTone(metric: string, value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return null;
-  switch (metric) {
-    case "avg":
-      if (value > 0.28) return s.cellGreen;
-      break;
-    case "iso":
-      if (value > 0.2) return s.cellGreen;
-      break;
-    case "barrel_pct":
-      if (value > 12) return s.cellGreen;
-      break;
-    case "hh_pct":
-      if (value > 38) return s.cellGreen;
-      break;
-    case "slg":
-      if (value > 0.48) return s.cellGreen;
-      break;
-    case "woba":
-      if (value > 0.35) return s.cellGreen;
-      break;
-    case "obp":
-      if (value > 0.35) return s.cellGreen;
-      break;
-  }
-  return null;
-}
-
 function normPitch(name?: string | null): string {
   return (name ?? "").trim().toLowerCase();
+}
+
+// ── Heat-map cell background color ─────────────────────────────────────────
+
+function heatBg(metric: string, value?: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "transparent";
+  switch (metric) {
+    case "avg":
+      if (value >= 0.300) return "rgba(34,197,94,0.45)";
+      if (value >= 0.260) return "rgba(34,197,94,0.20)";
+      if (value <= 0.180) return "rgba(239,68,68,0.35)";
+      if (value <= 0.220) return "rgba(239,68,68,0.18)";
+      return "transparent";
+    case "obp":
+      if (value >= 0.370) return "rgba(34,197,94,0.45)";
+      if (value >= 0.330) return "rgba(34,197,94,0.20)";
+      if (value <= 0.260) return "rgba(239,68,68,0.35)";
+      if (value <= 0.300) return "rgba(239,68,68,0.18)";
+      return "transparent";
+    case "slg":
+      if (value >= 0.500) return "rgba(34,197,94,0.45)";
+      if (value >= 0.430) return "rgba(34,197,94,0.20)";
+      if (value <= 0.300) return "rgba(239,68,68,0.35)";
+      if (value <= 0.370) return "rgba(239,68,68,0.18)";
+      return "transparent";
+    case "iso":
+      if (value >= 0.220) return "rgba(34,197,94,0.45)";
+      if (value >= 0.170) return "rgba(34,197,94,0.20)";
+      if (value <= 0.080) return "rgba(239,68,68,0.35)";
+      if (value <= 0.120) return "rgba(239,68,68,0.18)";
+      return "transparent";
+    case "woba":
+      if (value >= 0.380) return "rgba(34,197,94,0.45)";
+      if (value >= 0.340) return "rgba(34,197,94,0.20)";
+      if (value <= 0.270) return "rgba(239,68,68,0.35)";
+      if (value <= 0.310) return "rgba(239,68,68,0.18)";
+      return "transparent";
+    case "barrel_pct":
+      if (value >= 15) return "rgba(34,197,94,0.45)";
+      if (value >= 10) return "rgba(34,197,94,0.20)";
+      if (value <= 3) return "rgba(239,68,68,0.35)";
+      if (value <= 6) return "rgba(239,68,68,0.18)";
+      return "transparent";
+    case "hh_pct":
+      if (value >= 45) return "rgba(34,197,94,0.45)";
+      if (value >= 38) return "rgba(34,197,94,0.20)";
+      if (value <= 25) return "rgba(239,68,68,0.35)";
+      if (value <= 30) return "rgba(239,68,68,0.18)";
+      return "transparent";
+  }
+  return "transparent";
 }
 
 // ── Aggregate batter stats for selected pitches ─────────────────────────────
@@ -106,6 +112,7 @@ type AggregatedStats = {
   slg: number | null;
   woba: number | null;
   obp: number | null;
+  pa: number | null;
 };
 
 function aggregateStatsForPitches(
@@ -123,19 +130,13 @@ function aggregateStatsForPitches(
       slg: batter.slg ?? null,
       woba: null,
       obp: null,
+      pa: null,
     };
   }
 
-  // Weighted average by pitch_count
   let totalCount = 0;
-  let sumBa = 0;
-  let sumIso = 0;
-  let sumSlg = 0;
-  let sumWoba = 0;
-  let hasBa = false;
-  let hasIso = false;
-  let hasSlg = false;
-  let hasWoba = false;
+  let sumBa = 0, sumIso = 0, sumSlg = 0, sumWoba = 0;
+  let hasBa = false, hasIso = false, hasSlg = false, hasWoba = false;
 
   for (const row of filtered) {
     const count = (row as any).pitch_count ?? row.count ?? 1;
@@ -147,14 +148,17 @@ function aggregateStatsForPitches(
   }
 
   const w = totalCount || 1;
+  const avg = hasBa ? sumBa / w : null;
+  const slgVal = hasSlg ? sumSlg / w : (batter.slg ?? null);
   return {
-    avg: hasBa ? sumBa / w : null,
+    avg,
     iso: hasIso ? sumIso / w : (batter.iso ?? null),
     barrel_pct_l15: batter.l15_barrel_pct ?? null,
     hh_pct: batter.l15_hard_hit_pct ?? null,
-    slg: hasSlg ? sumSlg / w : (batter.slg ?? null),
+    slg: slgVal,
     woba: hasWoba ? sumWoba / w : null,
-    obp: null, // Not available per-pitch; future enhancement
+    obp: null,
+    pa: totalCount > 0 ? totalCount : null,
   };
 }
 
@@ -172,241 +176,12 @@ function dedupeBatters(batters: MlbBatterPick[]): MlbBatterPick[] {
   return Array.from(byKey.values()).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 }
 
-// ── Pitch toggle button ─────────────────────────────────────────────────────
+// ── Heat-map stat cell ─────────────────────────────────────────────────────
 
-function PitchToggle({
-  pitch,
-  active,
-  onToggle,
-}: {
-  pitch: MlbPitchMixRow;
-  active: boolean;
-  onToggle: () => void;
-}) {
+function StatCell({ metric, value, display }: { metric: string; value?: number | null; display: string }) {
   return (
-    <Pressable
-      style={[s.pitchToggle, active ? s.pitchToggleActive : s.pitchToggleInactive]}
-      onPress={onToggle}
-    >
-      <Text style={[s.pitchToggleText, active ? s.pitchToggleTextActive : null]} numberOfLines={1}>
-        {pitch.pitch_name ?? "?"}{" "}
-        <Text style={s.pitchTogglePct}>{pitch.pitch_pct != null ? `${pitch.pitch_pct.toFixed(0)}%` : ""}</Text>
-      </Text>
-    </Pressable>
-  );
-}
-
-// ── Mini progress bar ───────────────────────────────────────────────────────
-
-function MiniBar({ label, value, max = 100, color = "#10B981" }: { label: string; value?: number | null; max?: number; color?: string }) {
-  const pct = value != null && Number.isFinite(value) ? Math.min(value / max, 1) : 0;
-  return (
-    <View style={s.miniBarWrap}>
-      <Text style={s.miniBarLabel}>{label}</Text>
-      <View style={s.miniBarTrack}>
-        <View style={[s.miniBarFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: color }]} />
-      </View>
-      <Text style={s.miniBarValue}>{value != null && Number.isFinite(value) ? `${value.toFixed(1)}%` : "—"}</Text>
-    </View>
-  );
-}
-
-// ── Batted ball profile + hit log ───────────────────────────────────────────
-
-function BattedBallProfile({ batter }: { batter: MlbBatterPick }) {
-  const bb = batter.bvp_batted_ball;
-  if (!bb) return null;
-
-  const profile = bb.profile;
-  const log = bb.log ?? [];
-  const hasProfile = profile != null && (profile.total_batted ?? 0) > 0;
-
-  if (!hasProfile && log.length === 0) return null;
-
-  return (
-    <View style={s.bbWrap}>
-      <Text style={s.expandedTitle}>
-        Batted Ball History{profile?.total_batted ? ` (${profile.total_batted} batted)` : ""}
-      </Text>
-
-      {/* Mini bars - Line 1: batted ball types, Line 2: spray direction */}
-      {hasProfile ? (
-        <View style={s.bbBarsContainer}>
-          <View style={s.bbBarsRow}>
-            <MiniBar label="Barrel%" value={profile!.barrel_pct} max={25} color="#10B981" />
-            <MiniBar label="HH%" value={profile!.hh_pct} max={60} color="#10B981" />
-            <MiniBar label="FB%" value={profile!.fb_pct} max={60} color="#60A5FA" />
-            <MiniBar label="GB%" value={profile!.gb_pct} max={60} color="#F59E0B" />
-            <MiniBar label="LD%" value={profile!.ld_pct} max={40} color="#34D399" />
-            <MiniBar label="PU%" value={profile!.pu_pct} max={30} color="#94A3B8" />
-            <MiniBar label="HR/FB%" value={profile!.hr_fb_pct} max={30} color="#F87171" />
-          </View>
-          <View style={s.bbBarsRow}>
-            <MiniBar label="Pull%" value={profile!.pull_pct} max={60} color="#A78BFA" />
-            <MiniBar label="Str%" value={profile!.str_pct} max={50} color="#A78BFA" />
-            <MiniBar label="Oppo%" value={profile!.oppo_pct} max={40} color="#A78BFA" />
-          </View>
-        </View>
-      ) : null}
-
-      {/* Hit log table */}
-      {log.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View>
-            <View style={s.logHeaderRow}>
-              <Text style={[s.logHeaderCell, s.logDateCol]}>DATE</Text>
-              <Text style={[s.logHeaderCell, s.logPitchCol]}>PITCH</Text>
-              <Text style={s.logHeaderCell}>EV</Text>
-              <Text style={s.logHeaderCell}>ANGLE</Text>
-              <Text style={s.logHeaderCell}>DIST</Text>
-              <Text style={[s.logHeaderCell, s.logTrajCol]}>TRAJ</Text>
-              <Text style={[s.logHeaderCell, s.logResultCol]}>RESULT</Text>
-              <Text style={s.logHeaderCell}>PARKS</Text>
-            </View>
-            {log.map((row, idx) => {
-              const ev = row.ev;
-              const evStyle = ev != null && ev >= 95 ? s.cellGreen : null;
-              const angleVal = row.angle;
-              const angleLaunch = angleVal != null && angleVal >= 10 && angleVal <= 30;
-              const isHr = (row.result ?? "").toLowerCase() === "home_run";
-              return (
-                <View key={`log-${idx}`} style={s.logRow}>
-                  <Text style={[s.logCell, s.logDateCol]}>{row.date ?? "—"}</Text>
-                  <Text style={[s.logCell, s.logPitchCol]}>{row.pitch ?? "—"}</Text>
-                  <Text style={[s.logCell, evStyle]}>{ev != null ? ev.toFixed(1) : "—"}</Text>
-                  <Text style={[s.logCell, angleLaunch ? s.cellGreen : null]}>{angleVal != null ? angleVal.toFixed(1) : "—"}</Text>
-                  <Text style={s.logCell}>{row.dist != null ? row.dist.toFixed(0) : "—"}</Text>
-                  <Text style={[s.logCell, s.logTrajCol]}>{formatTrajectory(row.trajectory)}</Text>
-                  <Text style={[s.logCell, s.logResultCol, isHr ? s.cellGreen : null]}>{formatResult(row.result)}</Text>
-                  <Text style={[s.logCell, (row.hr_parks ?? 0) >= 20 ? s.cellGreen : null]}>{row.hr_parks != null ? `${row.hr_parks}/30` : "—"}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </ScrollView>
-      ) : null}
-    </View>
-  );
-}
-
-function formatTrajectory(traj?: string | null): string {
-  if (!traj) return "—";
-  return traj.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatResult(result?: string | null): string {
-  if (!result) return "—";
-  return result.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-// ── Single batter row ───────────────────────────────────────────────────────
-
-function BatterRow({
-  batter,
-  stats,
-  expanded,
-  onToggleExpand,
-  selected,
-  onToggleSelect,
-  isWeakSpot,
-}: {
-  batter: MlbBatterPick;
-  stats: AggregatedStats;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  selected: boolean;
-  onToggleSelect: () => void;
-  isWeakSpot: boolean;
-}) {
-  const tone = gradeTone(batter.grade);
-  const bvp = batter.bvp_career;
-  const hasBvp = bvp != null && (bvp.pa ?? 0) > 0;
-  const hasFd = !!(batter.fd_market_id && batter.fd_selection_id);
-
-  return (
-    <View style={[
-      s.batterRowWrap,
-      selected ? s.batterRowSelected : null,
-      isWeakSpot ? s.batterRowWeakSpot : null,
-    ]}>
-      <View style={s.batterRow}>
-        {/* Select box */}
-        <Pressable
-          style={[s.selectBox, selected ? s.selectBoxActive : null, !hasFd ? s.selectBoxDisabled : null]}
-          onPress={hasFd ? onToggleSelect : undefined}
-        >
-          <Text style={[s.selectBoxText, selected ? s.selectBoxTextActive : null]}>
-            {selected ? "✓" : "+"}
-          </Text>
-        </Pressable>
-
-        {/* Chevron + player info */}
-        <Pressable style={s.batterInfoCol} onPress={onToggleExpand}>
-          <Text style={s.chevron}>{expanded ? "▾" : "▸"}</Text>
-          <View style={[s.gradeChip, { backgroundColor: tone.bg, borderColor: tone.border }]}>
-            <Text style={[s.gradeChipText, { color: tone.text }]}>{tone.short}</Text>
-          </View>
-          <View style={s.nameWrap}>
-            <Text style={s.batterName} numberOfLines={1}>
-              {isWeakSpot ? "🎯 " : ""}{batter.batter_name ?? "—"}
-            </Text>
-            <Text style={s.batterMeta}>
-              {handLabel(batter.bat_side)}{isWeakSpot ? " · WEAK SPOT" : ""}
-            </Text>
-          </View>
-        </Pressable>
-
-        {/* Scrollable stat cells */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.statsScroll}>
-          <View style={s.statsRow}>
-            <Text style={[s.statCell, greenTone("avg", stats.avg)]}>{fmt(stats.avg)}</Text>
-            <Text style={[s.statCell, greenTone("iso", stats.iso)]}>{fmt(stats.iso)}</Text>
-            <Text style={[s.statCell, greenTone("barrel_pct", stats.barrel_pct_l15)]}>{fmtPct(stats.barrel_pct_l15)}</Text>
-            <Text style={[s.statCell, greenTone("hh_pct", stats.hh_pct)]}>{fmtPct(stats.hh_pct)}</Text>
-            <Text style={[s.statCell, greenTone("slg", stats.slg)]}>{fmt(stats.slg)}</Text>
-          </View>
-        </ScrollView>
-      </View>
-
-      {/* Expanded: Career BvP + Batted Ball Profile + Hit Log */}
-      {expanded ? (
-        <View style={s.expandedArea}>
-          {/* ── Career BvP stats ── */}
-          <Text style={s.expandedTitle}>Career vs Pitcher</Text>
-          {hasBvp ? (
-            <View style={s.bvpWrap}>
-              <View style={s.bvpSummary}>
-                <Text style={s.bvpSummaryText}>
-                  {bvp!.hits ?? 0}-{bvp!.pa ?? 0} · {bvp!.hr ?? 0} HR
-                </Text>
-              </View>
-              <View style={s.bvpTable}>
-                <View style={s.bvpHeaderRow}>
-                  <Text style={s.bvpHeaderCell}>AVG</Text>
-                  <Text style={s.bvpHeaderCell}>ISO</Text>
-                  <Text style={s.bvpHeaderCell}>SLG</Text>
-                  <Text style={s.bvpHeaderCell}>OBP</Text>
-                  <Text style={s.bvpHeaderCell}>K%</Text>
-                  <Text style={s.bvpHeaderCell}>BB%</Text>
-                </View>
-                <View style={s.bvpValueRow}>
-                  <Text style={[s.bvpValueCell, greenTone("avg", bvp!.avg)]}>{fmt(bvp!.avg)}</Text>
-                  <Text style={[s.bvpValueCell, greenTone("iso", bvp!.iso)]}>{fmt(bvp!.iso)}</Text>
-                  <Text style={[s.bvpValueCell, greenTone("slg", bvp!.slg)]}>{fmt(bvp!.slg)}</Text>
-                  <Text style={[s.bvpValueCell, greenTone("obp", bvp!.obp)]}>{fmt(bvp!.obp)}</Text>
-                  <Text style={s.bvpValueCell}>{fmtPct(bvp!.k_pct)}</Text>
-                  <Text style={s.bvpValueCell}>{fmtPct(bvp!.bb_pct)}</Text>
-                </View>
-              </View>
-            </View>
-          ) : (
-            <Text style={s.bvpEmpty}>No career data vs this pitcher</Text>
-          )}
-
-          {/* ── Batted Ball Profile ── */}
-          <BattedBallProfile batter={batter} />
-        </View>
-      ) : null}
+    <View style={[s.statCell, { backgroundColor: heatBg(metric, value) }]}>
+      <Text style={s.statCellText}>{display}</Text>
     </View>
   );
 }
@@ -415,33 +190,29 @@ function BatterRow({
 
 function HandednessSection({
   label,
+  pitcherName,
   batters,
   pitcherMix,
   pitcherHand,
-  selectedKeys,
-  onToggleSelect,
   weakSpotIds,
 }: {
   label: string;
+  pitcherName: string;
   batters: MlbBatterPick[];
   pitcherMix: MlbPitchMixRow[];
   pitcherHand: string;
-  selectedKeys: Set<string>;
-  onToggleSelect: (key: string) => void;
   weakSpotIds: Set<number>;
 }) {
-  // All pitches selected by default
   const [selectedPitches, setSelectedPitches] = useState<Set<string>>(
     () => new Set(pitcherMix.map((r) => normPitch(r.pitch_name)))
   );
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const togglePitch = (pitchName: string) => {
     setSelectedPitches((prev) => {
       const next = new Set(prev);
       const key = normPitch(pitchName);
       if (next.has(key)) {
-        if (next.size > 1) next.delete(key); // Keep at least one selected
+        if (next.size > 1) next.delete(key);
       } else {
         next.add(key);
       }
@@ -449,77 +220,161 @@ function HandednessSection({
     });
   };
 
-  const toggleExpand = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const clearPitches = () => {
+    setSelectedPitches(new Set(pitcherMix.map((r) => normPitch(r.pitch_name))));
   };
 
-  // Determine the correct hitter_stats key based on pitcher hand
   const pitcherHandChar = (pitcherHand ?? "R").toUpperCase().startsWith("L") ? "L" : "R";
   const hitterStatsKey = pitcherHandChar === "L" ? "vs_lhp" : "vs_rhp";
 
+  // Compute stats for each batter
+  const batterStats = useMemo(() => {
+    return batters.map((batter) => {
+      const pitchRows: MlbBatterVsPitchRow[] =
+        (batter as any).hitter_stats_vs_pitches?.[hitterStatsKey] ?? [];
+      return {
+        batter,
+        stats: aggregateStatsForPitches(pitchRows, selectedPitches, batter),
+      };
+    });
+  }, [batters, selectedPitches, hitterStatsKey]);
+
+  // Compute averages row
+  const avgRow = useMemo(() => {
+    let count = 0, sumAvg = 0, sumSlg = 0, sumIso = 0, sumWoba = 0, sumBrl = 0, sumHh = 0, sumPa = 0;
+    let hasAvg = false, hasSlg = false, hasIso = false, hasWoba = false, hasBrl = false, hasHh = false;
+    for (const { stats } of batterStats) {
+      count++;
+      if (stats.avg != null) { sumAvg += stats.avg; hasAvg = true; }
+      if (stats.slg != null) { sumSlg += stats.slg; hasSlg = true; }
+      if (stats.iso != null) { sumIso += stats.iso; hasIso = true; }
+      if (stats.woba != null) { sumWoba += stats.woba; hasWoba = true; }
+      if (stats.barrel_pct_l15 != null) { sumBrl += stats.barrel_pct_l15; hasBrl = true; }
+      if (stats.hh_pct != null) { sumHh += stats.hh_pct; hasHh = true; }
+      if (stats.pa != null) { sumPa += stats.pa; }
+    }
+    const n = count || 1;
+    return {
+      pa: sumPa || null,
+      avg: hasAvg ? sumAvg / n : null,
+      slg: hasSlg ? sumSlg / n : null,
+      iso: hasIso ? sumIso / n : null,
+      woba: hasWoba ? sumWoba / n : null,
+      barrel_pct: hasBrl ? sumBrl / n : null,
+      hh_pct: hasHh ? sumHh / n : null,
+    };
+  }, [batterStats]);
+
   if (batters.length === 0) return null;
+
+  // Build pitch label from active pitches
+  const activePitchNames = pitcherMix
+    .filter((p) => selectedPitches.has(normPitch(p.pitch_name)))
+    .map((p) => p.pitch_name)
+    .join(", ");
 
   return (
     <View style={s.handSection}>
-      <Text style={s.handLabel}>{label}</Text>
+      {/* Section header */}
+      <Text style={s.handLabel}>
+        {label} · {activePitchNames || "All Pitches"}
+      </Text>
 
-      {/* Pitch toggles */}
+      {/* Pitch toggle pills */}
       {pitcherMix.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.pitchToggleRow}>
           <View style={s.pitchToggleInner}>
-            {pitcherMix.map((pitch, idx) => (
-              <PitchToggle
-                key={`${normPitch(pitch.pitch_name)}-${idx}`}
-                pitch={pitch}
-                active={selectedPitches.has(normPitch(pitch.pitch_name))}
-                onToggle={() => togglePitch(pitch.pitch_name ?? "")}
-              />
-            ))}
+            {pitcherMix.map((pitch, idx) => {
+              const active = selectedPitches.has(normPitch(pitch.pitch_name));
+              return (
+                <Pressable
+                  key={`${normPitch(pitch.pitch_name)}-${idx}`}
+                  style={[s.pitchPill, active ? s.pitchPillActive : s.pitchPillInactive]}
+                  onPress={() => togglePitch(pitch.pitch_name ?? "")}
+                >
+                  <Text style={[s.pitchPillText, active ? s.pitchPillTextActive : null]} numberOfLines={1}>
+                    {pitch.pitch_name ?? "?"} {pitch.pitch_pct != null ? `${pitch.pitch_pct.toFixed(0)}%` : ""}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Pressable style={s.pitchClearBtn} onPress={clearPitches}>
+              <Text style={s.pitchClearText}>Clear</Text>
+            </Pressable>
           </View>
         </ScrollView>
       ) : null}
 
-      {/* Column headers */}
-      <View style={s.headerRow}>
-        <View style={s.headerInfoCol}>
-          <Text style={s.headerText}>PLAYER</Text>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.statsScroll}>
-          <View style={s.statsRow}>
-            <Text style={s.headerCell}>AVG</Text>
-            <Text style={s.headerCell}>ISO</Text>
-            <Text style={s.headerCell}>BRL%</Text>
-            <Text style={s.headerCell}>HH%</Text>
-            <Text style={s.headerCell}>SLG</Text>
+      {/* Table */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View>
+          {/* Column headers */}
+          <View style={s.tableHeaderRow}>
+            <View style={s.playerCol}>
+              <Text style={s.colHeader}>PLAYER</Text>
+            </View>
+            <View style={s.paCol}><Text style={s.colHeader}>PA</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>AVG</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>SLG</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>ISO</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>WOBA</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>BRL%</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>HH%</Text></View>
           </View>
-        </ScrollView>
-      </View>
 
-      {/* Batter rows */}
-      {batters.map((batter) => {
-        const batterId = String(batter.batter_id ?? batter.batter_name ?? "");
-        const pitchRows: MlbBatterVsPitchRow[] =
-          (batter as any).hitter_stats_vs_pitches?.[hitterStatsKey] ?? [];
-        const stats = aggregateStatsForPitches(pitchRows, selectedPitches, batter);
+          {/* Batter rows */}
+          {batterStats.map(({ batter, stats }, idx) => {
+            const isWeakSpot = batter.batter_id != null && weakSpotIds.has(batter.batter_id);
+            return (
+              <View
+                key={String(batter.batter_id ?? batter.batter_name ?? idx)}
+                style={[s.tableRow, isWeakSpot ? s.tableRowWeak : null]}
+              >
+                <View style={s.playerCol}>
+                  <View style={s.playerInfo}>
+                    <Text style={s.playerRank}>{idx + 1}</Text>
+                    <View style={s.playerNameWrap}>
+                      <Text style={s.playerName} numberOfLines={1}>
+                        {isWeakSpot ? "🎯 " : ""}{batter.batter_name ?? "—"}
+                      </Text>
+                      <Text style={s.playerMeta}>{handLabel(batter.bat_side)}</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={s.paCol}>
+                  <Text style={s.paCellText}>{stats.pa ?? "—"}</Text>
+                </View>
+                <StatCell metric="avg" value={stats.avg} display={fmt(stats.avg)} />
+                <StatCell metric="slg" value={stats.slg} display={fmt(stats.slg)} />
+                <StatCell metric="iso" value={stats.iso} display={fmt(stats.iso)} />
+                <StatCell metric="woba" value={stats.woba} display={fmt(stats.woba)} />
+                <StatCell metric="barrel_pct" value={stats.barrel_pct_l15} display={fmtPct(stats.barrel_pct_l15)} />
+                <StatCell metric="hh_pct" value={stats.hh_pct} display={fmtPct(stats.hh_pct)} />
+              </View>
+            );
+          })}
 
-        return (
-          <BatterRow
-            key={batterId}
-            batter={batter}
-            stats={stats}
-            expanded={expandedIds.has(batterId)}
-            onToggleExpand={() => toggleExpand(batterId)}
-            selected={selectedKeys.has(batterId)}
-            onToggleSelect={() => onToggleSelect(batterId)}
-            isWeakSpot={batter.batter_id != null && weakSpotIds.has(batter.batter_id)}
-          />
-        );
-      })}
+          {/* Averages row */}
+          {batterStats.length > 0 ? (
+            <View style={s.avgRow}>
+              <View style={s.playerCol}>
+                <Text style={s.avgLabel}>
+                  {label.startsWith("vs RHB") ? "RHB" : "LHB"} Avg
+                </Text>
+              </View>
+              <View style={s.paCol}>
+                <Text style={s.avgCellText}>{avgRow.pa ?? "—"}</Text>
+              </View>
+              <StatCell metric="avg" value={avgRow.avg} display={fmt(avgRow.avg)} />
+              <StatCell metric="slg" value={avgRow.slg} display={fmt(avgRow.slg)} />
+              <StatCell metric="iso" value={avgRow.iso} display={fmt(avgRow.iso)} />
+              <StatCell metric="woba" value={avgRow.woba} display={fmt(avgRow.woba)} />
+              <StatCell metric="barrel_pct" value={avgRow.barrel_pct} display={fmtPct(avgRow.barrel_pct)} />
+              <StatCell metric="hh_pct" value={avgRow.hh_pct} display={fmtPct(avgRow.hh_pct)} />
+            </View>
+          ) : null}
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -581,6 +436,7 @@ export function HrMatchupGameContent({
       {data.pitchers.map((pitcher) => {
         const batters = dedupeBatters(pitcher.batters ?? []).slice(0, 12);
         const pitcherHandRaw = (pitcher.pitcher_hand ?? "R").toUpperCase();
+        const pitcherHandLabel = pitcherHandRaw.startsWith("L") ? "LHP" : "RHP";
         const mixVsRhb = pitcher.pitch_mix?.vs_rhb ?? [];
         const mixVsLhb = pitcher.pitch_mix?.vs_lhb ?? [];
 
@@ -595,29 +451,30 @@ export function HrMatchupGameContent({
 
         return (
           <View key={String(pitcher.pitcher_id)} style={[s.panel, { borderColor: colors.border.subtle }]}>
-            <Text style={s.sectionEyebrow}>{pitcher.offense_team ?? "OFFENSE"} HITTERS</Text>
-            <Text style={s.sectionTitle}>
-              vs {pitcher.pitcher_name ?? "Pitcher"}{" "}
-              <Text style={s.sectionHand}>{pitcherHandRaw}</Text>
-            </Text>
+            {/* Pitcher header */}
+            <View style={s.pitcherHeader}>
+              <Text style={s.pitcherLabel}>Opposing Pitcher:</Text>
+              <Text style={s.pitcherName}>{pitcher.pitcher_name ?? "Pitcher"}</Text>
+              <View style={s.pitcherHandBadge}>
+                <Text style={s.pitcherHandText}>{pitcherHandLabel}</Text>
+              </View>
+            </View>
 
             <HandednessSection
-              label={`vs RHB · ${pitcher.pitcher_name ?? "Pitcher"} Pitch Mix`}
+              label="vs RHB"
+              pitcherName={pitcher.pitcher_name ?? "Pitcher"}
               batters={rhBatters}
               pitcherMix={mixVsRhb}
               pitcherHand={pitcherHandRaw}
-              selectedKeys={selectedKeys}
-              onToggleSelect={onToggleSelect}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
             />
 
             <HandednessSection
-              label={`vs LHB · ${pitcher.pitcher_name ?? "Pitcher"} Pitch Mix`}
+              label="vs LHB"
+              pitcherName={pitcher.pitcher_name ?? "Pitcher"}
               batters={lhBatters}
               pitcherMix={mixVsLhb}
               pitcherHand={pitcherHandRaw}
-              selectedKeys={selectedKeys}
-              onToggleSelect={onToggleSelect}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
             />
 
@@ -642,7 +499,6 @@ export function MlbHrMatchupScreen() {
   const { data: boData } = useMlbBattingOrder(Number.isFinite(gamePk) ? gamePk : null);
   const platform = getBuildPlatform();
 
-  // Build weak spot lookup: pitcher_id -> Set of batter player_ids
   const weakSpotMap = useMemo(() => {
     const map = new Map<number, Set<number>>();
     for (const pitcher of boData?.pitchers ?? []) {
@@ -665,13 +521,11 @@ export function MlbHrMatchupScreen() {
   const awayLogo = getMlbTeamLogo(awayTeam);
   const homeLogo = getMlbTeamLogo(homeTeam);
 
-  // ── Global betslip (persists across games) ──
   const slipItems = usePropBetslip((st) => st.items);
   const addToSlip = usePropBetslip((st) => st.add);
   const removeFromSlip = usePropBetslip((st) => st.remove);
   const clearSlip = usePropBetslip((st) => st.clear);
 
-  // Derive which batterIds on THIS screen are in the global slip
   const selectedKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const item of slipItems) {
@@ -682,12 +536,7 @@ export function MlbHrMatchupScreen() {
     return keys;
   }, [slipItems]);
 
-  function makeSlipId(batter: MlbBatterPick): string {
-    return `mlb-hr-${String(batter.batter_id ?? batter.batter_name ?? "")}`;
-  }
-
   function toggleSelect(batterId: string) {
-    // Find the batter in our data
     let found: MlbBatterPick | null = null;
     for (const pitcher of data?.pitchers ?? []) {
       for (const b of pitcher.batters ?? []) {
@@ -700,7 +549,7 @@ export function MlbHrMatchupScreen() {
     }
     if (!found) return;
 
-    const slipId = makeSlipId(found);
+    const slipId = `mlb-hr-${batterId}`;
     if (slipItems.some((i) => i.id === slipId)) {
       removeFromSlip(slipId);
     } else if (slipItems.length < 10) {
@@ -720,7 +569,6 @@ export function MlbHrMatchupScreen() {
     }
   }
 
-  // Build FD link from ALL slip items (cross-game)
   const fdLink = useMemo(() => {
     const mlbItems = slipItems.filter((i) => i.sport === "mlb" && i.market === "MLB 1+ HR");
     if (mlbItems.length === 0) return null;
@@ -838,12 +686,10 @@ export function MlbHrMatchupScreen() {
       {(data?.pitchers ?? []).map((pitcher) => {
         const batters = dedupeBatters(pitcher.batters ?? []).slice(0, 12);
         const pitcherHandRaw = (pitcher.pitcher_hand ?? "R").toUpperCase();
-
-        // Determine which pitch mix to show per handedness section
+        const pitcherHandLabel = pitcherHandRaw.startsWith("L") ? "LHP" : "RHP";
         const mixVsRhb = pitcher.pitch_mix?.vs_rhb ?? [];
         const mixVsLhb = pitcher.pitch_mix?.vs_lhb ?? [];
 
-        // Split batters by handedness
         const rhBatters = batters.filter((b) => {
           const side = (b.bat_side ?? "").toUpperCase();
           return side === "R" || side === "S";
@@ -855,29 +701,29 @@ export function MlbHrMatchupScreen() {
 
         return (
           <View key={String(pitcher.pitcher_id)} style={[s.panel, { borderColor: colors.border.subtle }]}>
-            <Text style={s.sectionEyebrow}>{pitcher.offense_team ?? "OFFENSE"} HITTERS</Text>
-            <Text style={s.sectionTitle}>
-              vs {pitcher.pitcher_name ?? "Pitcher"}{" "}
-              <Text style={s.sectionHand}>{pitcherHandRaw}</Text>
-            </Text>
+            <View style={s.pitcherHeader}>
+              <Text style={s.pitcherLabel}>Opposing Pitcher:</Text>
+              <Text style={s.pitcherName}>{pitcher.pitcher_name ?? "Pitcher"}</Text>
+              <View style={s.pitcherHandBadge}>
+                <Text style={s.pitcherHandText}>{pitcherHandLabel}</Text>
+              </View>
+            </View>
 
             <HandednessSection
-              label={`vs RHB · ${pitcher.pitcher_name ?? "Pitcher"} Pitch Mix`}
+              label="vs RHB"
+              pitcherName={pitcher.pitcher_name ?? "Pitcher"}
               batters={rhBatters}
               pitcherMix={mixVsRhb}
               pitcherHand={pitcherHandRaw}
-              selectedKeys={selectedKeys}
-              onToggleSelect={toggleSelect}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
             />
 
             <HandednessSection
-              label={`vs LHB · ${pitcher.pitcher_name ?? "Pitcher"} Pitch Mix`}
+              label="vs LHB"
+              pitcherName={pitcher.pitcher_name ?? "Pitcher"}
               batters={lhBatters}
               pitcherMix={mixVsLhb}
               pitcherHand={pitcherHandRaw}
-              selectedKeys={selectedKeys}
-              onToggleSelect={toggleSelect}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
             />
 
@@ -908,7 +754,6 @@ export function MlbHrMatchupScreen() {
             <Text style={s.parlayClear}>✕</Text>
           </Pressable>
         </View>
-
         <View style={s.parlayLegs}>
           {mlbSlipItems.map((item) => (
             <Text key={item.id} style={s.parlayLegText}>
@@ -916,7 +761,6 @@ export function MlbHrMatchupScreen() {
             </Text>
           ))}
         </View>
-
         <View style={s.parlayBtnRow}>
           <Pressable
             style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
@@ -928,7 +772,6 @@ export function MlbHrMatchupScreen() {
             </Text>
           </Pressable>
         </View>
-
         <Text style={s.parlayNote}>Parlay availability subject to sportsbook approval.</Text>
       </View>
     ) : null}
@@ -938,12 +781,14 @@ export function MlbHrMatchupScreen() {
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 
-const STAT_CELL_W = 58;
+const STAT_W = 54;
+const PLAYER_W = 140;
+const PA_W = 36;
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
   scrollView: { flex: 1 },
-  content: { padding: 16, gap: 10, paddingBottom: 40 },
+  content: { padding: 12, gap: 10, paddingBottom: 40 },
 
   // Nav
   navRow: { flexDirection: "row", gap: 8, marginBottom: 2 },
@@ -986,212 +831,121 @@ const s = StyleSheet.create({
   pillText: { color: "#BFDBFE", fontSize: 11, fontWeight: "700" },
 
   // Panel
-  panel: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 12, gap: 8 },
-  sectionEyebrow: { color: "#64748B", fontSize: 11, fontWeight: "700" },
-  sectionTitle: { color: "#E5E7EB", fontSize: 16, fontWeight: "800" },
-  sectionHand: { color: "#94A3B8", fontSize: 13, fontWeight: "600" },
+  panel: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, backgroundColor: "#0B1529", padding: 12, gap: 10 },
+
+  // Pitcher header
+  pitcherHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingBottom: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#1E293B",
+  },
+  pitcherLabel: { color: "#64748B", fontSize: 11, fontWeight: "600" },
+  pitcherName: { color: "#E5E7EB", fontSize: 16, fontWeight: "800" },
+  pitcherHandBadge: {
+    borderWidth: 1,
+    borderColor: "#6366F1",
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: "rgba(99,102,241,0.15)",
+  },
+  pitcherHandText: { color: "#A5B4FC", fontSize: 10, fontWeight: "800" },
 
   // Handedness section
-  handSection: { gap: 4, marginTop: 8 },
-  handLabel: { color: "#10B981", fontSize: 12, fontWeight: "800", marginBottom: 4 },
+  handSection: { gap: 6, marginTop: 8 },
+  handLabel: { color: "#94A3B8", fontSize: 11, fontWeight: "700" },
 
-  // Pitch toggles
-  pitchToggleRow: { marginBottom: 6 },
-  pitchToggleInner: { flexDirection: "row", gap: 6 },
-  pitchToggle: {
+  // Pitch toggle pills
+  pitchToggleRow: { marginBottom: 4 },
+  pitchToggleInner: { flexDirection: "row", gap: 6, alignItems: "center" },
+  pitchPill: {
     borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  pitchToggleActive: {
+  pitchPillActive: {
     borderColor: "#10B981",
-    backgroundColor: "rgba(16,185,129,0.18)",
+    backgroundColor: "rgba(16,185,129,0.22)",
   },
-  pitchToggleInactive: {
+  pitchPillInactive: {
     borderColor: "#334155",
     backgroundColor: "#0F172A",
   },
-  pitchToggleText: { color: "#E5E7EB", fontSize: 11, fontWeight: "700" },
-  pitchToggleTextActive: { color: "#A7F3D0" },
-  pitchTogglePct: { color: "#64748B", fontSize: 10, fontWeight: "600" },
+  pitchPillText: { color: "#94A3B8", fontSize: 10, fontWeight: "700" },
+  pitchPillTextActive: { color: "#A7F3D0" },
+  pitchClearBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  pitchClearText: { color: "#64748B", fontSize: 10, fontWeight: "700" },
 
-  // Header row
-  headerRow: {
+  // Table
+  tableHeaderRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#334155",
+    paddingBottom: 6,
+  },
+  colHeader: { color: "#64748B", fontSize: 9, fontWeight: "800", textAlign: "center" },
+  playerCol: { width: PLAYER_W, paddingLeft: 4, justifyContent: "center" },
+  paCol: { width: PA_W, alignItems: "center", justifyContent: "center" },
+  statColHdr: { width: STAT_W, alignItems: "center", justifyContent: "center" },
+
+  // Table row
+  tableRow: {
     flexDirection: "row",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#334155",
-    paddingBottom: 4,
-    marginBottom: 2,
+    borderBottomColor: "rgba(51,65,85,0.4)",
+    minHeight: 38,
   },
-  headerInfoCol: { width: 136, paddingLeft: 26 },
-  headerText: { color: "#64748B", fontSize: 9, fontWeight: "800" },
-  headerCell: {
-    width: STAT_CELL_W,
-    color: "#64748B",
-    fontSize: 9,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-
-  // Select box
-  selectBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "#334155",
-    backgroundColor: "#0F172A",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 2,
-  },
-  selectBoxActive: {
-    borderColor: "#10B981",
-    backgroundColor: "rgba(16,185,129,0.2)",
-  },
-  selectBoxDisabled: { opacity: 0.3 },
-  selectBoxText: { color: "#64748B", fontSize: 12, fontWeight: "800" },
-  selectBoxTextActive: { color: "#10B981" },
-
-  // Batter row
-  batterRowWrap: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(51,65,85,0.5)",
-  },
-  batterRowSelected: {
-    backgroundColor: "rgba(16,185,129,0.06)",
-  },
-  batterRowWeakSpot: {
+  tableRowWeak: {
     borderLeftWidth: 2,
     borderLeftColor: "#10B981",
   },
-  batterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    minHeight: 36,
-  },
-  batterInfoCol: {
-    width: 110,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingLeft: 2,
-    paddingVertical: 4,
-  },
-  chevron: { color: "#64748B", fontSize: 11, width: 14 },
-  gradeChip: {
-    borderWidth: 1,
-    borderRadius: 4,
-    width: 22,
-    height: 18,
+
+  // Player info in row
+  playerInfo: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
+  playerRank: { color: "#475569", fontSize: 11, fontWeight: "700", width: 16, textAlign: "center" },
+  playerNameWrap: { flex: 1, gap: 0 },
+  playerName: { color: "#E5E7EB", fontSize: 11, fontWeight: "700" },
+  playerMeta: { color: "#64748B", fontSize: 9, fontWeight: "600" },
+
+  // PA cell
+  paCellText: { color: "#94A3B8", fontSize: 11, fontWeight: "700", textAlign: "center" },
+
+  // Stat cell with heat-map background
+  statCell: {
+    width: STAT_W,
     alignItems: "center",
     justifyContent: "center",
-  },
-  gradeChipText: { fontSize: 9, fontWeight: "900" },
-  nameWrap: { flex: 1, gap: 0 },
-  batterName: { color: "#E5E7EB", fontSize: 11, fontWeight: "700" },
-  batterMeta: { color: "#64748B", fontSize: 9, fontWeight: "600" },
-
-  // Stats
-  statsScroll: { flex: 1 },
-  statsRow: { flexDirection: "row" },
-  statCell: {
-    width: STAT_CELL_W,
-    color: "#E2E8F0",
-    fontSize: 11,
-    fontWeight: "700",
-    textAlign: "center",
     paddingVertical: 6,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: "rgba(51,65,85,0.3)",
   },
-  cellGreen: { color: "#34D399" },
+  statCellText: { color: "#E2E8F0", fontSize: 11, fontWeight: "700" },
 
-  // Expanded
-  expandedArea: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: "rgba(15,23,42,0.4)",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#1E293B",
-    gap: 6,
-  },
-  expandedTitle: { color: "#94A3B8", fontSize: 10, fontWeight: "800" },
-  bvpWrap: { gap: 4 },
-  bvpSummary: { flexDirection: "row", gap: 8 },
-  bvpSummaryText: { color: "#CBD5E1", fontSize: 11, fontWeight: "700" },
-  bvpTable: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#334155",
-    borderRadius: 6,
-    overflow: "hidden",
-  },
-  bvpHeaderRow: { flexDirection: "row", backgroundColor: "#0F172A" },
-  bvpHeaderCell: {
-    flex: 1,
-    color: "#64748B",
-    fontSize: 9,
-    fontWeight: "800",
-    textAlign: "center",
-    paddingVertical: 5,
-  },
-  bvpValueRow: { flexDirection: "row", backgroundColor: "rgba(15,23,42,0.25)" },
-  bvpValueCell: {
-    flex: 1,
-    color: "#E2E8F0",
-    fontSize: 11,
-    fontWeight: "700",
-    textAlign: "center",
-    paddingVertical: 6,
-  },
-  bvpEmpty: { color: "#475569", fontSize: 11, fontStyle: "italic" },
-
-  // Batted ball profile
-  bbWrap: { gap: 6, marginTop: 6 },
-  bbBarsContainer: { gap: 4 },
-  bbBarsRow: { flexDirection: "row", gap: 4 },
-  miniBarWrap: { flex: 1, minWidth: 38, gap: 1 },
-  miniBarLabel: { color: "#64748B", fontSize: 8, fontWeight: "800" },
-  miniBarTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#1E293B",
-    overflow: "hidden",
-  },
-  miniBarFill: { height: 6, borderRadius: 3 },
-  miniBarValue: { color: "#CBD5E1", fontSize: 9, fontWeight: "700" },
-
-  // Hit log table
-  logHeaderRow: {
+  // Averages row
+  avgRow: {
     flexDirection: "row",
-    backgroundColor: "#0F172A",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#334155",
+    borderTopWidth: 1,
+    borderTopColor: "#334155",
+    backgroundColor: "rgba(15,23,42,0.5)",
+    minHeight: 34,
   },
-  logHeaderCell: {
-    width: 52,
-    color: "#64748B",
-    fontSize: 8,
-    fontWeight: "800",
-    textAlign: "center",
-    paddingVertical: 5,
-  },
-  logDateCol: { width: 72, textAlign: "left", paddingLeft: 4 },
-  logPitchCol: { width: 90, textAlign: "left", paddingLeft: 4 },
-  logTrajCol: { width: 80, textAlign: "left", paddingLeft: 4 },
-  logResultCol: { width: 76, textAlign: "left", paddingLeft: 4 },
-  logRow: {
-    flexDirection: "row",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(51,65,85,0.5)",
-  },
-  logCell: {
-    width: 52,
-    color: "#E2E8F0",
-    fontSize: 10,
-    fontWeight: "600",
-    textAlign: "center",
-    paddingVertical: 5,
-  },
+  avgLabel: { color: "#94A3B8", fontSize: 11, fontWeight: "800" },
+  avgCellText: { color: "#94A3B8", fontSize: 11, fontWeight: "800", textAlign: "center" },
+
+  // Error / empty
+  errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },
+  errorTitle: { color: "#FCA5A5", fontWeight: "700" },
+  errorText: { color: "#FECACA", marginTop: 4, fontSize: 12 },
+  errorRetry: { color: "#E5E7EB", marginTop: 8, fontSize: 12 },
+  emptyTitle: { color: "#E5E7EB", fontWeight: "700" },
+  emptyText: { color: "#A7C0E8", marginTop: 6, fontSize: 12 },
 
   // Parlay bar
   parlayBar: {
@@ -1219,12 +973,4 @@ const s = StyleSheet.create({
   parlayBtnDisabled: { opacity: 0.4, borderColor: "#334155" },
   parlayBtnText: { color: "#A7F3D0", fontSize: 13, fontWeight: "800" },
   parlayNote: { color: "#64748B", fontSize: 9 },
-
-  // Error / empty
-  errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },
-  errorTitle: { color: "#FCA5A5", fontWeight: "700" },
-  errorText: { color: "#FECACA", marginTop: 4, fontSize: 12 },
-  errorRetry: { color: "#E5E7EB", marginTop: 8, fontSize: 12 },
-  emptyTitle: { color: "#E5E7EB", fontWeight: "700" },
-  emptyText: { color: "#A7C0E8", marginTop: 6, fontSize: 12 },
 });

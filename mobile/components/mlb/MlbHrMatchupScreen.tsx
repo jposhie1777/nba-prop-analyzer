@@ -316,11 +316,8 @@ function HandednessSection({
             <View style={s.playerCol}>
               <Text style={s.colHeader}>PLAYER</Text>
             </View>
-            <View style={s.paCol}><Text style={s.colHeader}>PA</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>AVG</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>SLG</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>ISO</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>WOBA</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>BRL%</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>HH%</Text></View>
           </View>
@@ -344,13 +341,8 @@ function HandednessSection({
                     </View>
                   </View>
                 </View>
-                <View style={s.paCol}>
-                  <Text style={s.paCellText}>{stats.pa ?? "—"}</Text>
-                </View>
-                <StatCell metric="avg" value={stats.avg} display={fmt(stats.avg)} />
                 <StatCell metric="slg" value={stats.slg} display={fmt(stats.slg)} />
                 <StatCell metric="iso" value={stats.iso} display={fmt(stats.iso)} />
-                <StatCell metric="woba" value={stats.woba} display={fmt(stats.woba)} />
                 <StatCell metric="barrel_pct" value={stats.barrel_pct_l15} display={fmtPct(stats.barrel_pct_l15)} />
                 <StatCell metric="hh_pct" value={stats.hh_pct} display={fmtPct(stats.hh_pct)} />
               </View>
@@ -365,13 +357,8 @@ function HandednessSection({
                   {label.startsWith("vs RHB") ? "RHB" : "LHB"} Avg
                 </Text>
               </View>
-              <View style={s.paCol}>
-                <Text style={s.avgCellText}>{avgRow.pa ?? "—"}</Text>
-              </View>
-              <StatCell metric="avg" value={avgRow.avg} display={fmt(avgRow.avg)} />
               <StatCell metric="slg" value={avgRow.slg} display={fmt(avgRow.slg)} />
               <StatCell metric="iso" value={avgRow.iso} display={fmt(avgRow.iso)} />
-              <StatCell metric="woba" value={avgRow.woba} display={fmt(avgRow.woba)} />
               <StatCell metric="barrel_pct" value={avgRow.barrel_pct} display={fmtPct(avgRow.barrel_pct)} />
               <StatCell metric="hh_pct" value={avgRow.hh_pct} display={fmtPct(avgRow.hh_pct)} />
             </View>

@@ -33,6 +33,7 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 SLATE_TZ = ZoneInfo("America/New_York")
 TODAY = datetime.datetime.now(SLATE_TZ).date()
 NOW = datetime.datetime.now(datetime.timezone.utc)
+CURRENT_SEASON = TODAY.year
 INSERT_CHUNK_SIZE = 250
 INSERT_MAX_ATTEMPTS = 5
 INSERT_TIMEOUT_SECONDS = 45
@@ -694,7 +695,7 @@ async def fetch_batting_order_splits(session, pitcher_id, pitcher_name, pitcher_
             "stats": "statSplits",
             "group": "pitching",
             "sitCodes": "b1,b2,b3,b4,b5,b6,b7,b8,b9",
-            "season": 2025,
+            "season": CURRENT_SEASON,
         },
     )
     if not data or not isinstance(data, dict):
@@ -719,7 +720,7 @@ async def fetch_batting_order_splits(session, pitcher_id, pitcher_name, pitcher_
                 "pitcher_name":  pitcher_name,
                 "pitcher_hand":  pitcher_hand,
                 "opp_team_id":   opp_team_id,
-                "season":        2025,
+                "season":        CURRENT_SEASON,
                 "batting_order": order_num,
                 "at_bats":       si(st.get("atBats")),
                 "hits":          si(st.get("hits")),
@@ -874,7 +875,7 @@ async def fetch_pitcher_matchup(session, pitcher_id, opp_team_id, game_pk, pitch
 
     split_rows = []
     for split_row in data.get("splits", []):
-        if si(split_row.get("season")) != 2025:
+        if si(split_row.get("season")) != CURRENT_SEASON:
             continue
 
         split_key = split_row.get("split", "Season")
@@ -922,7 +923,7 @@ async def fetch_pitcher_matchup(session, pitcher_id, opp_team_id, game_pk, pitch
 
     pitch_log_rows = []
     for pitch in data.get("pitchLog", []):
-        if si(pitch.get("season")) != 2025:
+        if si(pitch.get("season")) != CURRENT_SEASON:
             continue
 
         pitch_log_rows.append({
@@ -932,7 +933,7 @@ async def fetch_pitcher_matchup(session, pitcher_id, opp_team_id, game_pk, pitch
             "batter_hand":pitch.get("type", ""),
             "pitch_code": pitch.get("pitchCode", ""),
             "pitch_name": pitch.get("pitchName", ""),
-            "season":     2025,
+            "season":     CURRENT_SEASON,
             "count":      si(pitch.get("count")),
             "percentage": sf(pitch.get("percentage")),
             "home_runs":  si(pitch.get("homeRuns")),

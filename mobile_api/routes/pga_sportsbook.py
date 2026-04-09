@@ -290,6 +290,9 @@ def pga_sportsbook_markets(
       GROUP BY player_display_name
     ),
     -- Current tournament scores (if available) — DISTINCT to avoid dupe scorecard rows
+    -- Only show scores when the most recent tournament started within the last
+    -- 4 days (covers Thu→Sun of a tournament week). This prevents stale scores
+    -- from last week's event bleeding into the current week's view.
     current_tourn AS (
       SELECT DISTINCT player_display_name, position, to_par, r1, r2, r3, r4, total_strokes
       FROM `{SCORECARD_TABLE}`
@@ -298,6 +301,7 @@ def pga_sportsbook_markets(
           SELECT MAX(tournament_date) FROM `{SCORECARD_TABLE}`
           WHERE season = EXTRACT(YEAR FROM CURRENT_DATE())
         )
+        AND tournament_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 4 DAY)
     ),
     latest_per_tourn AS (
       SELECT

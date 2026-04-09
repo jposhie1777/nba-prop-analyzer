@@ -110,6 +110,7 @@ const MARKET_TYPE_LABELS: Record<string, string> = {
   top_nationality: "Top Region",
   finish_specials: "Golf Specials",
   specials: "Specials",
+  hole_matchup: "Hole Matchups",
   // Legacy fallbacks
   finishing_position: "Finish Position",
   round_score: "Round Score",
@@ -128,6 +129,7 @@ const MARKET_TYPE_ORDER = [
   "top_nationality",
   "finish_specials",
   "specials",
+  "hole_matchup",
   "finishing_position",
   "round_score",
   "hole_score",
@@ -231,6 +233,7 @@ function columnsForType(mt: string): ColumnConfig[] {
   if (mt === "player_round_score") return PLAYER_ROUND_SCORE_COLUMNS;
   if (mt === "top_nationality") return TOP_NATIONALITY_COLUMNS;
   if (mt === "specials" || mt === "finish_specials") return SPECIALS_COLUMNS;
+  if (mt === "hole_matchup") return MATCHUP_COLUMNS;
   if (mt === "make_cut") return GENERIC_COLUMNS;
   if (mt === "finishing_position") return TOP_FINISH_COLUMNS;
   return GENERIC_COLUMNS;
@@ -613,6 +616,7 @@ export default function PgaSportsbook() {
   const { colors } = useTheme();
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
   const [activeMarketType, setActiveMarketType] = useState<string | null>(null);
+  const [activeSubFilter, setActiveSubFilter] = useState<string | null>(null);
 
   // Betslip stores
   const { items: betslipItems, add: addToBetslip, remove: removeFromBetslip } = usePropBetslip();
@@ -701,13 +705,42 @@ export default function PgaSportsbook() {
       ? activeMarketType
       : marketTypeTabs[0] ?? null;
 
-  // Flatten selections for the active tab
+  // Sub-filter options: distinct market_names within the active tab
+  const subFilterOptions = useMemo(() => {
+    if (!marketsData?.market_groups || !effectiveTab) return [];
+    const group = marketsData.market_groups[effectiveTab];
+    if (!group || group.markets.length <= 1) return [];
+    return group.markets.map((m) => m.market_name);
+  }, [marketsData, effectiveTab]);
+
+  // Effective sub-filter — reset to "All" when options change
+  const effectiveSubFilter =
+    activeSubFilter && subFilterOptions.includes(activeSubFilter)
+      ? activeSubFilter
+      : null; // null = "All"
+
+  // Flatten selections for the active tab, filtered by sub-filter
   const tableData = useMemo(() => {
     if (!marketsData?.market_groups || !effectiveTab) return [];
     const group = marketsData.market_groups[effectiveTab];
     if (!group) return [];
+    if (effectiveSubFilter) {
+      const filtered = group.markets.filter((m) => m.market_name === effectiveSubFilter);
+      return filtered.flatMap((m) => m.selections);
+    }
     return group.markets.flatMap((m) => m.selections);
-  }, [marketsData, effectiveTab]);
+  }, [marketsData, effectiveTab, effectiveSubFilter]);
+
+  // Filtered markets for GroupComparisonView (matchup/3-ball)
+  const filteredMarkets = useMemo(() => {
+    if (!marketsData?.market_groups || !effectiveTab) return [];
+    const group = marketsData.market_groups[effectiveTab];
+    if (!group) return [];
+    if (effectiveSubFilter) {
+      return group.markets.filter((m) => m.market_name === effectiveSubFilter);
+    }
+    return group.markets;
+  }, [marketsData, effectiveTab, effectiveSubFilter]);
 
   // ─── Tournament List View ────────────────────────────────────────────────
 
@@ -761,6 +794,7 @@ export default function PgaSportsbook() {
         onPress={() => {
           setSelectedTournament(null);
           setActiveMarketType(null);
+          setActiveSubFilter(null);
         }}
         style={styles.backBtn}
       >
@@ -789,7 +823,7 @@ export default function PgaSportsbook() {
           return (
             <Pressable
               key={mt}
-              onPress={() => setActiveMarketType(mt)}
+              onPress={() => { setActiveMarketType(mt); setActiveSubFilter(null); }}
               style={[
                 styles.tab,
                 active && {
@@ -812,6 +846,52 @@ export default function PgaSportsbook() {
         })}
       </ScrollView>
 
+      {/* Sub-filter toggles (market_name within a tab) */}
+      {!marketsLoading && subFilterOptions.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.tabBar, { paddingTop: 0, paddingBottom: 6 }]}
+          style={{ flexGrow: 0 }}
+        >
+          <Pressable
+            onPress={() => setActiveSubFilter(null)}
+            style={[
+              styles.subTab,
+              !effectiveSubFilter
+                ? { backgroundColor: colors.accent.primary, borderColor: colors.accent.primary }
+                : { borderColor: colors.border.subtle },
+            ]}
+          >
+            <Text style={[styles.subTabLabel, { color: !effectiveSubFilter ? colors.text.inverse : colors.text.muted }]}>
+              All
+            </Text>
+          </Pressable>
+          {subFilterOptions.map((name) => {
+            const active = name === effectiveSubFilter;
+            return (
+              <Pressable
+                key={name}
+                onPress={() => setActiveSubFilter(name)}
+                style={[
+                  styles.subTab,
+                  active
+                    ? { backgroundColor: colors.accent.primary, borderColor: colors.accent.primary }
+                    : { borderColor: colors.border.subtle },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[styles.subTabLabel, { color: active ? colors.text.inverse : colors.text.muted }]}
+                >
+                  {name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
+
       {/* Table */}
       {marketsLoading && (
         <ActivityIndicator size="large" color={colors.accent.primary} style={{ marginTop: 32 }} />
@@ -821,10 +901,10 @@ export default function PgaSportsbook() {
       )}
       {!marketsLoading && effectiveTab && tableData.length > 0 && (
         <View style={{ flex: 1, paddingBottom: selectedKeys.size > 0 ? 80 : 0 }}>
-          {(effectiveTab === "matchup" || effectiveTab === "three_ball") &&
+          {(effectiveTab === "matchup" || effectiveTab === "three_ball" || effectiveTab === "hole_matchup") &&
            marketsData?.market_groups[effectiveTab] ? (
             <GroupComparisonView
-              markets={marketsData.market_groups[effectiveTab].markets}
+              markets={filteredMarkets}
               marketType={effectiveTab}
               selectedKeys={selectedKeys}
               onToggle={handleToggle}
@@ -957,6 +1037,13 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   tabLabel: { fontSize: 10, fontWeight: "700" },
+  subTab: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  subTabLabel: { fontSize: 9, fontWeight: "600" },
   errorText: { textAlign: "center", marginTop: 24, fontSize: 13 },
   emptyText: { textAlign: "center", marginTop: 32, fontSize: 14 },
 });

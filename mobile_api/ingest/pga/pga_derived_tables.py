@@ -228,8 +228,11 @@ def rebuild_all(*, dry_run: bool = False) -> Dict[str, int]:
           UNION ALL
           SELECT player_id, ANY_VALUE(player_name) AS player_name, stat_id,
                  ANY_VALUE(stat_value) AS stat_value
-          FROM profile_deduped
-          WHERE stat_id NOT IN (SELECT DISTINCT stat_id FROM stats_deduped)
+          FROM profile_deduped p
+          WHERE NOT EXISTS (
+            SELECT 1 FROM stats_deduped s
+            WHERE s.player_id = p.player_id AND s.stat_id = p.stat_id
+          )
           GROUP BY player_id, stat_id
         ),
         pivoted AS (

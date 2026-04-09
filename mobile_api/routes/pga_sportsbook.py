@@ -100,6 +100,7 @@ _FD_TO_PGA_ALIASES: Dict[str, str] = {
     "jj spaun": "j.j. spaun",
     "si woo kim": "si woo kim",
     "cam davis": "cameron davis",
+    "nicolas echavarria": "nico echavarria",
 }
 
 

@@ -301,7 +301,7 @@ def pga_sportsbook_markets(
           SELECT MAX(tournament_date) FROM `{SCORECARD_TABLE}`
           WHERE season = EXTRACT(YEAR FROM CURRENT_DATE())
         )
-        AND tournament_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 4 DAY)
+        AND SAFE.PARSE_DATE('%Y-%m-%d', tournament_date) >= DATE_SUB(CURRENT_DATE(), INTERVAL 4 DAY)
     ),
     latest_per_tourn AS (
       SELECT

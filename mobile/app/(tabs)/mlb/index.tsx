@@ -4,11 +4,13 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { MlbUpcomingGamesScreen } from "@/components/mlb/MlbUpcomingGamesScreen";
 import { MlbHrCheatSheetScreen } from "@/components/mlb/MlbHrCheatSheetScreen";
 import { MlbNrfiScreen } from "@/components/mlb/MlbNrfiScreen";
+import { MlbPitchingSummaryScreen } from "@/components/mlb/MlbPitchingSummaryScreen";
 
-type Tab = "matchups" | "cheat-sheet" | "nrfi";
+type Tab = "matchups" | "pitching" | "cheat-sheet" | "nrfi";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "matchups", label: "Matchups" },
+  { key: "pitching", label: "Pitching" },
   { key: "cheat-sheet", label: "HR Cheat Sheet" },
   { key: "nrfi", label: "NRFI / YRFI" },
 ];
@@ -42,6 +44,7 @@ export default function MlbHomeScreen() {
       {/* Content */}
       <View style={styles.content}>
         {activeTab === "matchups" ? <MlbUpcomingGamesScreen /> : null}
+        {activeTab === "pitching" ? <MlbPitchingSummaryScreen /> : null}
         {activeTab === "cheat-sheet" ? <MlbHrCheatSheetScreen /> : null}
         {activeTab === "nrfi" ? <MlbNrfiScreen /> : null}
       </View>
@@ -65,7 +68,7 @@ const styles = StyleSheet.create({
   },
   tabActive: { borderBottomColor: "#10B981" },
   tabInactive: { borderBottomColor: "transparent" },
-  tabText: { fontSize: 12, fontWeight: "800" },
+  tabText: { fontSize: 11, fontWeight: "800" },
   tabTextActive: { color: "#10B981" },
   tabTextInactive: { color: "#64748B" },
   content: { flex: 1 },

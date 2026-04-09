@@ -34,12 +34,22 @@ SCORECARD_TABLE = f"{PROJECT}.pga_data.website_player_scorecard"
 
 _ORPHAN_NAMES = frozenset({
     "3 Balls", "Make/Miss Cut", "Player Round Scores", "Specials", "Top Region",
+    "2 Balls", "Hole Match Betting",
 })
+
+# Prefixes for standalone entries that should never absorb orphan sub-events
+# (multi-event specials, etc.)
+_STANDALONE_PREFIXES = ("Major Specials",)
 
 
 def _is_pga_tournament(name: str) -> bool:
-    """Return True if *name* looks like a PGA Tour weekly event."""
-    return name.startswith("PGA ") and any(c.isdigit() for c in name)
+    """Return True if *name* looks like a PGA Tour weekly event (including majors)."""
+    if not name or name in _ORPHAN_NAMES:
+        return False
+    if any(name.startswith(p) for p in _STANDALONE_PREFIXES):
+        return False
+    # Must contain a year digit to be a real tournament
+    return any(c.isdigit() for c in name)
 
 
 def _remap_market_type(source_tourn: str, mtype: str, mname: str) -> str:
@@ -51,7 +61,9 @@ def _remap_market_type(source_tourn: str, mtype: str, mname: str) -> str:
         return "specials"
     if source_tourn == "Player Round Scores":
         return "player_round_score"
-    # 3 Balls / Make/Miss Cut already have correct types (three_ball / make_cut)
+    if source_tourn == "Hole Match Betting":
+        return "hole_matchup"
+    # 3 Balls / 2 Balls / Make/Miss Cut already have correct types (three_ball / matchup / make_cut)
 
     # Main-tournament sub-categorisation
     if mtype == "outright_winner" and mname in {
@@ -181,10 +193,13 @@ def pga_sportsbook_tournaments() -> List[Dict[str, Any]]:
         result.append(entry)
 
     # ── Consolidate orphan tournaments into the main PGA event ─────────
-    main_pga = next(
-        (t["tournament_name"] for t in result if _is_pga_tournament(t.get("tournament_name", ""))),
-        None,
-    )
+    # Pick the real tournament with the most selections (the current week's
+    # headliner), not just the first name that pattern-matches.
+    pga_candidates = [
+        t for t in result if _is_pga_tournament(t.get("tournament_name", ""))
+    ]
+    pga_candidates.sort(key=lambda t: t.get("total_selections", 0), reverse=True)
+    main_pga = pga_candidates[0]["tournament_name"] if pga_candidates else None
     if main_pga:
         main_entry = next(t for t in result if t["tournament_name"] == main_pga)
         for t in list(result):

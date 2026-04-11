@@ -64,6 +64,7 @@ class CapturedRequest(BaseModel):
     url: str
     status: int
     body: Any
+    request_headers: Dict[str, str] = {}
 
 
 class FetchResponse(BaseModel):
@@ -130,11 +131,17 @@ def fetch_url(req: FetchRequest) -> FetchResponse:
                                 body = json.loads(raw)
                             except Exception:
                                 body = raw
+                        # Capture request headers (needed for x-px-context token)
+                        try:
+                            req_hdrs = dict(response.request.headers)
+                        except Exception:
+                            req_hdrs = {}
                         captured.append(
                             CapturedRequest(
                                 url=resp_url,
                                 status=response.status,
                                 body=body,
+                                request_headers=req_hdrs,
                             )
                         )
                         logger.info("captured %s  status=%d", resp_url[:120], response.status)

@@ -871,7 +871,6 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
 
     if not all_rows:
         logger.warning("0 rows parsed across all tournaments.")
-        return []
 
     if dry_run:
         seen: Set[str] = set()
@@ -882,6 +881,9 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
                 print(json.dumps(row, default=str))
         return all_rows
 
+    # Always write the artifact file (even when empty) so upload-artifact
+    # has something to upload and the downstream load job can gracefully
+    # skip via its has_rows check instead of failing on missing artifact.
     Path(ARTIFACT_PATH).parent.mkdir(parents=True, exist_ok=True)
     with open(ARTIFACT_PATH, "w") as fh:
         for row in all_rows:

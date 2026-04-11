@@ -706,7 +706,20 @@ def _fetch_market_prices(
             rows = _parse_market_prices_response(
                 body, scraped_at, event_name, player_map, market_name_map
             )
-            logger.info("  → %d rows", len(rows))
+            if not rows:
+                body_type = type(body).__name__
+                if isinstance(body, list):
+                    preview = f"list(len={len(body)})"
+                    if body:
+                        preview += f" first={json.dumps(body[0])[:300]}"
+                else:
+                    preview = json.dumps(body)[:500] if not isinstance(body, str) else body[:500]
+                logger.warning(
+                    "  → 0 rows (status=%d type=%s body=%s)",
+                    resp.status_code, body_type, preview,
+                )
+            else:
+                logger.info("  → %d rows", len(rows))
             all_rows.extend(rows)
         except Exception as exc:
             logger.warning("Batch %d failed: %s", i + 1, exc)

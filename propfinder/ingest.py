@@ -913,8 +913,8 @@ async def fetch_statcast_batter_pitch_stats(session, batter_id, batter_name, sea
     if season is None:
         season = CURRENT_SEASON
 
-    # Build date range for the season
-    date_gt = f"{season}-02-01"
+    # Build date range for regular season only (skip spring training)
+    date_gt = f"{season}-03-20"
     date_lt = f"{season}-11-30"
 
     params = {
@@ -971,6 +971,11 @@ async def fetch_statcast_batter_pitch_stats(session, batter_id, batter_name, sea
     # Aggregate by (pitch_type, pitch_name, p_throws)
     groups = {}  # key -> accumulator
     for row in reader:
+        # Skip non-regular-season games (spring training, etc.)
+        game_type = (row.get("game_type") or "").strip()
+        if game_type and game_type != "R":
+            continue
+
         pt = (row.get("pitch_type") or "").strip()
         pn = (row.get("pitch_name") or "").strip()
         pn = _PITCH_NAME_MAP.get(pn, pn)  # normalize to PropFinder names

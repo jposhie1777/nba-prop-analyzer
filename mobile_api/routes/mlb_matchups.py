@@ -802,6 +802,7 @@ def _fetch_batter_vs_pitches_map(
           UPPER(CAST(pitch_hand AS STRING)) AS pitcher_hand,
           CAST(pitch_type AS STRING) AS pitch_name,
           COUNT(1) AS pitch_count,
+          SUM(CASE WHEN LOWER(CAST(result AS STRING)) IN ('single', 'double', 'triple', 'home_run') THEN 1 ELSE 0 END) AS hits,
           AVG(
             CASE
               WHEN LOWER(CAST(result AS STRING)) IN ('single', 'double', 'triple', 'home_run') THEN 1.0
@@ -864,10 +865,13 @@ def _fetch_batter_vs_pitches_map(
         count = _safe_int(row.get("pitch_count")) or 0
         totals[(batter_id, pitcher_hand)] = totals.get((batter_id, pitcher_hand), 0) + count
         out.setdefault(batter_id, {"L": [], "R": []}).setdefault(pitcher_hand, [])
+        hits = _safe_int(row.get("hits")) or 0
         out[batter_id][pitcher_hand].append(
             {
                 "pitch_name": pitch_name,
                 "pitch_count": count,
+                "hits": hits,
+                "at_bats": count,
                 "pitch_pct": None,
                 "ba": _safe_float(row.get("ba")),
                 "woba": _safe_float(row.get("woba")),

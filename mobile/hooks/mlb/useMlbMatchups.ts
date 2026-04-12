@@ -61,6 +61,9 @@ export type MlbPitchMixRow = {
 export type MlbBatterVsPitchRow = {
   pitch_name?: string | null;
   count?: number | null;
+  pitch_count?: number | null;
+  hits?: number | null;
+  at_bats?: number | null;
   pitch_pct?: number | null;
   ba?: number | null;
   woba?: number | null;

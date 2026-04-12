@@ -57,46 +57,53 @@ function heatBg(metric: string, value?: number | null): string {
   if (value == null || !Number.isFinite(value)) return "transparent";
   switch (metric) {
     case "avg":
-      if (value >= 0.300) return "rgba(34,197,94,0.45)";
-      if (value >= 0.260) return "rgba(34,197,94,0.20)";
-      if (value <= 0.180) return "rgba(239,68,68,0.35)";
-      if (value <= 0.220) return "rgba(239,68,68,0.18)";
+      if (value >= 0.300) return "rgba(22,163,74,0.55)";
+      if (value >= 0.260) return "rgba(22,163,74,0.28)";
+      if (value <= 0.180) return "rgba(220,38,38,0.50)";
+      if (value <= 0.220) return "rgba(220,38,38,0.25)";
       return "transparent";
     case "obp":
-      if (value >= 0.370) return "rgba(34,197,94,0.45)";
-      if (value >= 0.330) return "rgba(34,197,94,0.20)";
-      if (value <= 0.260) return "rgba(239,68,68,0.35)";
-      if (value <= 0.300) return "rgba(239,68,68,0.18)";
+      if (value >= 0.370) return "rgba(22,163,74,0.55)";
+      if (value >= 0.330) return "rgba(22,163,74,0.28)";
+      if (value <= 0.260) return "rgba(220,38,38,0.50)";
+      if (value <= 0.300) return "rgba(220,38,38,0.25)";
       return "transparent";
     case "slg":
-      if (value >= 0.500) return "rgba(34,197,94,0.45)";
-      if (value >= 0.430) return "rgba(34,197,94,0.20)";
-      if (value <= 0.300) return "rgba(239,68,68,0.35)";
-      if (value <= 0.370) return "rgba(239,68,68,0.18)";
+      if (value >= 0.500) return "rgba(22,163,74,0.55)";
+      if (value >= 0.430) return "rgba(22,163,74,0.28)";
+      if (value <= 0.300) return "rgba(220,38,38,0.50)";
+      if (value <= 0.370) return "rgba(220,38,38,0.25)";
       return "transparent";
     case "iso":
-      if (value >= 0.220) return "rgba(34,197,94,0.45)";
-      if (value >= 0.170) return "rgba(34,197,94,0.20)";
-      if (value <= 0.080) return "rgba(239,68,68,0.35)";
-      if (value <= 0.120) return "rgba(239,68,68,0.18)";
+      if (value >= 0.220) return "rgba(22,163,74,0.55)";
+      if (value >= 0.170) return "rgba(22,163,74,0.28)";
+      if (value <= 0.080) return "rgba(220,38,38,0.50)";
+      if (value <= 0.120) return "rgba(220,38,38,0.25)";
       return "transparent";
     case "woba":
-      if (value >= 0.380) return "rgba(34,197,94,0.45)";
-      if (value >= 0.340) return "rgba(34,197,94,0.20)";
-      if (value <= 0.270) return "rgba(239,68,68,0.35)";
-      if (value <= 0.310) return "rgba(239,68,68,0.18)";
+      if (value >= 0.380) return "rgba(22,163,74,0.55)";
+      if (value >= 0.340) return "rgba(22,163,74,0.28)";
+      if (value <= 0.270) return "rgba(220,38,38,0.50)";
+      if (value <= 0.310) return "rgba(220,38,38,0.25)";
+      return "transparent";
+    case "k_pct":
+      // Lower K% is better for the batter (inverted: green=low, red=high)
+      if (value <= 12) return "rgba(22,163,74,0.55)";
+      if (value <= 18) return "rgba(22,163,74,0.28)";
+      if (value >= 35) return "rgba(220,38,38,0.50)";
+      if (value >= 28) return "rgba(220,38,38,0.25)";
       return "transparent";
     case "barrel_pct":
-      if (value >= 15) return "rgba(34,197,94,0.45)";
-      if (value >= 10) return "rgba(34,197,94,0.20)";
-      if (value <= 3) return "rgba(239,68,68,0.35)";
-      if (value <= 6) return "rgba(239,68,68,0.18)";
+      if (value >= 15) return "rgba(22,163,74,0.55)";
+      if (value >= 10) return "rgba(22,163,74,0.28)";
+      if (value <= 3) return "rgba(220,38,38,0.50)";
+      if (value <= 6) return "rgba(220,38,38,0.25)";
       return "transparent";
     case "hh_pct":
-      if (value >= 45) return "rgba(34,197,94,0.45)";
-      if (value >= 38) return "rgba(34,197,94,0.20)";
-      if (value <= 25) return "rgba(239,68,68,0.35)";
-      if (value <= 30) return "rgba(239,68,68,0.18)";
+      if (value >= 45) return "rgba(22,163,74,0.55)";
+      if (value >= 38) return "rgba(22,163,74,0.28)";
+      if (value <= 25) return "rgba(220,38,38,0.50)";
+      if (value <= 30) return "rgba(220,38,38,0.25)";
       return "transparent";
   }
   return "transparent";
@@ -106,45 +113,62 @@ function heatBg(metric: string, value?: number | null): string {
 
 type AggregatedStats = {
   avg: number | null;
+  obp: number | null;
+  slg: number | null;
   iso: number | null;
+  woba: number | null;
+  k_pct: number | null;
+  pa: number | null;
+  hits: number | null;
+  at_bats: number | null;
   barrel_pct_l15: number | null;
   hh_pct: number | null;
-  slg: number | null;
-  woba: number | null;
-  obp: number | null;
-  pa: number | null;
 };
 
 function aggregateStatsForPitches(
   pitchRows: MlbBatterVsPitchRow[],
   selectedPitches: Set<string>,
-  batter: MlbBatterPick
+  batter: MlbBatterPick,
+  pitcherMixRows?: MlbPitchMixRow[],
 ): AggregatedStats {
   const filtered = pitchRows.filter((r) => selectedPitches.has(normPitch(r.pitch_name)));
   if (filtered.length === 0) {
     return {
-      avg: null,
+      avg: null, obp: null,
       iso: batter.iso ?? null,
       barrel_pct_l15: batter.l15_barrel_pct ?? null,
       hh_pct: batter.l15_hard_hit_pct ?? null,
       slg: batter.slg ?? null,
-      woba: null,
-      obp: null,
-      pa: null,
+      woba: null, k_pct: null,
+      pa: null, hits: null, at_bats: null,
     };
   }
 
-  let totalCount = 0;
+  let totalCount = 0, totalHits = 0;
   let sumBa = 0, sumIso = 0, sumSlg = 0, sumWoba = 0;
   let hasBa = false, hasIso = false, hasSlg = false, hasWoba = false;
 
   for (const row of filtered) {
-    const count = (row as any).pitch_count ?? row.count ?? 1;
+    const count = row.pitch_count ?? row.count ?? 1;
     totalCount += count;
+    totalHits += row.hits ?? 0;
     if (row.ba != null) { sumBa += row.ba * count; hasBa = true; }
     if (row.iso != null) { sumIso += row.iso * count; hasIso = true; }
     if (row.slg != null) { sumSlg += row.slg * count; hasSlg = true; }
     if (row.woba != null) { sumWoba += row.woba * count; hasWoba = true; }
+  }
+
+  // Compute weighted K% from pitcher pitch mix for the selected pitches
+  let kPct: number | null = null;
+  if (pitcherMixRows && pitcherMixRows.length > 0) {
+    const mixFiltered = pitcherMixRows.filter((r) => selectedPitches.has(normPitch(r.pitch_name)));
+    let sumK = 0, sumMixCount = 0;
+    let hasK = false;
+    for (const m of mixFiltered) {
+      const mc = m.pitch_count ?? 1;
+      if (m.k_pct != null) { sumK += m.k_pct * mc; sumMixCount += mc; hasK = true; }
+    }
+    if (hasK && sumMixCount > 0) kPct = sumK / sumMixCount;
   }
 
   const w = totalCount || 1;
@@ -152,13 +176,16 @@ function aggregateStatsForPitches(
   const slgVal = hasSlg ? sumSlg / w : (batter.slg ?? null);
   return {
     avg,
+    obp: null,
     iso: hasIso ? sumIso / w : (batter.iso ?? null),
     barrel_pct_l15: batter.l15_barrel_pct ?? null,
     hh_pct: batter.l15_hard_hit_pct ?? null,
     slg: slgVal,
     woba: hasWoba ? sumWoba / w : null,
-    obp: null,
+    k_pct: kPct,
     pa: totalCount > 0 ? totalCount : null,
+    hits: totalHits > 0 ? totalHits : null,
+    at_bats: totalCount > 0 ? totalCount : null,
   };
 }
 
@@ -186,6 +213,38 @@ function StatCell({ metric, value, display }: { metric: string; value?: number |
   );
 }
 
+// ── Pitch pill color map (matches PropFinder) ───────────────────────────────
+
+const PITCH_COLORS: Record<string, string> = {
+  "four-seam fb": "#EF4444",
+  "4-seam fastball": "#EF4444",
+  "fastball": "#EF4444",
+  "sinker": "#F97316",
+  "cutter": "#A855F7",
+  "slider": "#EAB308",
+  "sweeper": "#EAB308",
+  "curveball": "#22D3EE",
+  "changeup": "#10B981",
+  "splitter": "#6366F1",
+  "knuckle curve": "#06B6D4",
+  "slurve": "#84CC16",
+};
+
+function pitchColor(name?: string | null): string {
+  const n = (name ?? "").trim().toLowerCase();
+  for (const [key, color] of Object.entries(PITCH_COLORS)) {
+    if (n.includes(key) || key.includes(n)) return color;
+  }
+  return "#64748B";
+}
+
+// ── H-AB format helper ──────────────────────────────────────────────────────
+
+function fmtHAB(hits?: number | null, ab?: number | null): string {
+  if (hits == null || ab == null) return "—";
+  return `${hits}-${ab}`;
+}
+
 // ── Handedness section (vs RHB or vs LHB) ───────────────────────────────────
 
 function HandednessSection({
@@ -205,7 +264,6 @@ function HandednessSection({
 }) {
   const [selectedPitches, setSelectedPitches] = useState<Set<string>>(() => {
     const over25 = pitcherMix.filter((r) => (r.pitch_pct ?? 0) >= 25);
-    // Fall back to all pitches if none meet the threshold
     const selected = over25.length > 0 ? over25 : pitcherMix;
     return new Set(selected.map((r) => normPitch(r.pitch_name)));
   });
@@ -237,34 +295,38 @@ function HandednessSection({
         (batter as any).hitter_stats_vs_pitches?.[hitterStatsKey] ?? [];
       return {
         batter,
-        stats: aggregateStatsForPitches(pitchRows, selectedPitches, batter),
+        stats: aggregateStatsForPitches(pitchRows, selectedPitches, batter, pitcherMix),
       };
     });
-  }, [batters, selectedPitches, hitterStatsKey]);
+  }, [batters, selectedPitches, hitterStatsKey, pitcherMix]);
 
   // Compute averages row
   const avgRow = useMemo(() => {
-    let count = 0, sumAvg = 0, sumSlg = 0, sumIso = 0, sumWoba = 0, sumBrl = 0, sumHh = 0, sumPa = 0;
-    let hasAvg = false, hasSlg = false, hasIso = false, hasWoba = false, hasBrl = false, hasHh = false;
+    let count = 0, sumAvg = 0, sumSlg = 0, sumIso = 0, sumWoba = 0, sumKPct = 0;
+    let hasAvg = false, hasSlg = false, hasIso = false, hasWoba = false, hasK = false;
+    let totalPa = 0, totalHits = 0, totalAb = 0;
     for (const { stats } of batterStats) {
       count++;
       if (stats.avg != null) { sumAvg += stats.avg; hasAvg = true; }
       if (stats.slg != null) { sumSlg += stats.slg; hasSlg = true; }
       if (stats.iso != null) { sumIso += stats.iso; hasIso = true; }
       if (stats.woba != null) { sumWoba += stats.woba; hasWoba = true; }
-      if (stats.barrel_pct_l15 != null) { sumBrl += stats.barrel_pct_l15; hasBrl = true; }
-      if (stats.hh_pct != null) { sumHh += stats.hh_pct; hasHh = true; }
-      if (stats.pa != null) { sumPa += stats.pa; }
+      if (stats.k_pct != null) { sumKPct += stats.k_pct; hasK = true; }
+      if (stats.pa != null) totalPa += stats.pa;
+      if (stats.hits != null) totalHits += stats.hits;
+      if (stats.at_bats != null) totalAb += stats.at_bats;
     }
     const n = count || 1;
     return {
-      pa: sumPa || null,
+      pa: totalPa || null,
+      hits: totalHits || null,
+      at_bats: totalAb || null,
       avg: hasAvg ? sumAvg / n : null,
+      obp: null as number | null,
       slg: hasSlg ? sumSlg / n : null,
       iso: hasIso ? sumIso / n : null,
       woba: hasWoba ? sumWoba / n : null,
-      barrel_pct: hasBrl ? sumBrl / n : null,
-      hh_pct: hasHh ? sumHh / n : null,
+      k_pct: hasK ? sumKPct / n : null,
     };
   }, [batterStats]);
 
@@ -278,51 +340,65 @@ function HandednessSection({
 
   return (
     <View style={s.handSection}>
-      {/* Section header */}
-      <Text style={s.handLabel}>
+      {/* Section header with pitch names */}
+      <Text style={s.handSectionTitle}>
         {label} · {activePitchNames || "All Pitches"}
       </Text>
 
-      {/* Pitch toggle pills */}
+      {/* Pitch toggle pills – PropFinder colored style */}
       {pitcherMix.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.pitchToggleRow}>
-          <View style={s.pitchToggleInner}>
-            {pitcherMix.map((pitch, idx) => {
-              const active = selectedPitches.has(normPitch(pitch.pitch_name));
-              return (
-                <Pressable
-                  key={`${normPitch(pitch.pitch_name)}-${idx}`}
-                  style={[s.pitchPill, active ? s.pitchPillActive : s.pitchPillInactive]}
-                  onPress={() => togglePitch(pitch.pitch_name ?? "")}
-                >
-                  <Text style={[s.pitchPillText, active ? s.pitchPillTextActive : null]} numberOfLines={1}>
-                    {pitch.pitch_name ?? "?"} {pitch.pitch_pct != null ? `${pitch.pitch_pct.toFixed(0)}%` : ""}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            <Pressable style={s.pitchClearBtn} onPress={clearPitches}>
-              <Text style={s.pitchClearText}>Clear</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
+        <View style={s.pitchToggleWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.pitchToggleRow}>
+            <View style={s.pitchToggleInner}>
+              {pitcherMix.map((pitch, idx) => {
+                const active = selectedPitches.has(normPitch(pitch.pitch_name));
+                const color = pitchColor(pitch.pitch_name);
+                return (
+                  <Pressable
+                    key={`${normPitch(pitch.pitch_name)}-${idx}`}
+                    style={[
+                      s.pitchPill,
+                      active
+                        ? { borderColor: color, backgroundColor: `${color}33` }
+                        : s.pitchPillInactive,
+                    ]}
+                    onPress={() => togglePitch(pitch.pitch_name ?? "")}
+                  >
+                    <Text
+                      style={[
+                        s.pitchPillText,
+                        active ? { color } : null,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {pitch.pitch_name ?? "?"} {pitch.pitch_pct != null ? `${pitch.pitch_pct.toFixed(0)}%` : ""}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </ScrollView>
+          <Pressable style={s.pitchClearBtn} onPress={clearPitches}>
+            <Text style={s.pitchClearText}>Clear</Text>
+          </Pressable>
+        </View>
       ) : null}
 
-      {/* Table */}
+      {/* Table – matches PropFinder column order */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View>
           {/* Column headers */}
           <View style={s.tableHeaderRow}>
-            <View style={s.playerCol}>
-              <Text style={s.colHeader}>PLAYER</Text>
-            </View>
+            <View style={s.rankCol}><Text style={s.colHeader}>#</Text></View>
+            <View style={s.playerCol}><Text style={[s.colHeader, { textAlign: "left" }]}>PLAYER</Text></View>
             <View style={s.paCol}><Text style={s.colHeader}>PA</Text></View>
+            <View style={s.habCol}><Text style={s.colHeader}>H-AB</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>AVG</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>OBP</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>SLG</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>ISO</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>WOBA</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>BRL%</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>HH%</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>wOBA</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>K%</Text></View>
           </View>
 
           {/* Batter rows */}
@@ -333,26 +409,29 @@ function HandednessSection({
                 key={String(batter.batter_id ?? batter.batter_name ?? idx)}
                 style={[s.tableRow, isWeakSpot ? s.tableRowWeak : null]}
               >
+                <View style={s.rankCol}>
+                  <Text style={s.playerRank}>{idx + 1}</Text>
+                </View>
                 <View style={s.playerCol}>
-                  <View style={s.playerInfo}>
-                    <Text style={s.playerRank}>{idx + 1}</Text>
-                    <View style={s.playerNameWrap}>
-                      <Text style={s.playerName} numberOfLines={1}>
-                        {isWeakSpot ? "🎯 " : ""}{batter.batter_name ?? "—"}
-                      </Text>
-                      <Text style={s.playerMeta}>{handLabel(batter.bat_side)}</Text>
-                    </View>
+                  <View style={s.playerNameWrap}>
+                    <Text style={s.playerName} numberOfLines={1}>
+                      {isWeakSpot ? "🎯 " : ""}{batter.batter_name ?? "—"}
+                    </Text>
+                    <Text style={s.playerMeta}>{handLabel(batter.bat_side)}</Text>
                   </View>
                 </View>
                 <View style={s.paCol}>
                   <Text style={s.paCellText}>{stats.pa ?? "—"}</Text>
                 </View>
+                <View style={s.habCol}>
+                  <Text style={s.paCellText}>{fmtHAB(stats.hits, stats.at_bats)}</Text>
+                </View>
                 <StatCell metric="avg" value={stats.avg} display={fmt(stats.avg)} />
+                <StatCell metric="obp" value={stats.obp} display={fmt(stats.obp)} />
                 <StatCell metric="slg" value={stats.slg} display={fmt(stats.slg)} />
                 <StatCell metric="iso" value={stats.iso} display={fmt(stats.iso)} />
                 <StatCell metric="woba" value={stats.woba} display={fmt(stats.woba)} />
-                <StatCell metric="barrel_pct" value={stats.barrel_pct_l15} display={fmtPct(stats.barrel_pct_l15)} />
-                <StatCell metric="hh_pct" value={stats.hh_pct} display={fmtPct(stats.hh_pct)} />
+                <StatCell metric="k_pct" value={stats.k_pct} display={stats.k_pct != null ? `${stats.k_pct.toFixed(0)}%` : "—"} />
               </View>
             );
           })}
@@ -360,6 +439,7 @@ function HandednessSection({
           {/* Averages row */}
           {batterStats.length > 0 ? (
             <View style={s.avgRow}>
+              <View style={s.rankCol} />
               <View style={s.playerCol}>
                 <Text style={s.avgLabel}>
                   {label.startsWith("vs RHB") ? "RHB" : "LHB"} Avg
@@ -368,12 +448,15 @@ function HandednessSection({
               <View style={s.paCol}>
                 <Text style={s.avgCellText}>{avgRow.pa ?? "—"}</Text>
               </View>
+              <View style={s.habCol}>
+                <Text style={s.avgCellText}>{fmtHAB(avgRow.hits, avgRow.at_bats)}</Text>
+              </View>
               <StatCell metric="avg" value={avgRow.avg} display={fmt(avgRow.avg)} />
+              <StatCell metric="obp" value={avgRow.obp} display={fmt(avgRow.obp)} />
               <StatCell metric="slg" value={avgRow.slg} display={fmt(avgRow.slg)} />
               <StatCell metric="iso" value={avgRow.iso} display={fmt(avgRow.iso)} />
               <StatCell metric="woba" value={avgRow.woba} display={fmt(avgRow.woba)} />
-              <StatCell metric="barrel_pct" value={avgRow.barrel_pct} display={fmtPct(avgRow.barrel_pct)} />
-              <StatCell metric="hh_pct" value={avgRow.hh_pct} display={fmtPct(avgRow.hh_pct)} />
+              <StatCell metric="k_pct" value={avgRow.k_pct} display={avgRow.k_pct != null ? `${avgRow.k_pct.toFixed(0)}%` : "—"} />
             </View>
           ) : null}
         </View>
@@ -784,9 +867,11 @@ export function MlbHrMatchupScreen() {
 
 // ── Styles ──────────────────────────────────────────────────────────────────
 
-const STAT_W = 54;
-const PLAYER_W = 140;
-const PA_W = 36;
+const STAT_W = 52;
+const PLAYER_W = 130;
+const PA_W = 34;
+const RANK_W = 22;
+const HAB_W = 52;
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
@@ -858,11 +943,12 @@ const s = StyleSheet.create({
   pitcherHandText: { color: "#A5B4FC", fontSize: 10, fontWeight: "800" },
 
   // Handedness section
-  handSection: { gap: 6, marginTop: 8 },
-  handLabel: { color: "#94A3B8", fontSize: 11, fontWeight: "700" },
+  handSection: { gap: 6, marginTop: 10 },
+  handSectionTitle: { color: "#94A3B8", fontSize: 12, fontWeight: "700", marginBottom: 2 },
 
   // Pitch toggle pills
-  pitchToggleRow: { marginBottom: 4 },
+  pitchToggleWrap: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  pitchToggleRow: { flex: 1 },
   pitchToggleInner: { flexDirection: "row", gap: 6, alignItems: "center" },
   pitchPill: {
     borderWidth: 1,
@@ -870,19 +956,18 @@ const s = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  pitchPillActive: {
-    borderColor: "#10B981",
-    backgroundColor: "rgba(16,185,129,0.22)",
-  },
   pitchPillInactive: {
     borderColor: "#334155",
     backgroundColor: "#0F172A",
   },
   pitchPillText: { color: "#94A3B8", fontSize: 10, fontWeight: "700" },
-  pitchPillTextActive: { color: "#A7F3D0" },
   pitchClearBtn: {
-    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 999,
+    paddingHorizontal: 10,
     paddingVertical: 4,
+    marginLeft: 6,
   },
   pitchClearText: { color: "#64748B", fontSize: 10, fontWeight: "700" },
 
@@ -892,10 +977,14 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#334155",
     paddingBottom: 6,
+    paddingTop: 2,
+    alignItems: "center",
   },
   colHeader: { color: "#64748B", fontSize: 9, fontWeight: "800", textAlign: "center" },
-  playerCol: { width: PLAYER_W, paddingLeft: 4, justifyContent: "center" },
+  rankCol: { width: RANK_W, alignItems: "center", justifyContent: "center" },
+  playerCol: { width: PLAYER_W, paddingLeft: 2, justifyContent: "center" },
   paCol: { width: PA_W, alignItems: "center", justifyContent: "center" },
+  habCol: { width: HAB_W, alignItems: "center", justifyContent: "center" },
   statColHdr: { width: STAT_W, alignItems: "center", justifyContent: "center" },
 
   // Table row
@@ -904,6 +993,7 @@ const s = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(51,65,85,0.4)",
     minHeight: 38,
+    alignItems: "center",
   },
   tableRowWeak: {
     borderLeftWidth: 2,
@@ -911,36 +1001,36 @@ const s = StyleSheet.create({
   },
 
   // Player info in row
-  playerInfo: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
-  playerRank: { color: "#475569", fontSize: 11, fontWeight: "700", width: 16, textAlign: "center" },
-  playerNameWrap: { flex: 1, gap: 0 },
+  playerRank: { color: "#475569", fontSize: 10, fontWeight: "700", textAlign: "center" },
+  playerNameWrap: { flex: 1, gap: 1 },
   playerName: { color: "#E5E7EB", fontSize: 11, fontWeight: "700" },
   playerMeta: { color: "#64748B", fontSize: 9, fontWeight: "600" },
 
-  // PA cell
-  paCellText: { color: "#94A3B8", fontSize: 11, fontWeight: "700", textAlign: "center" },
+  // PA / H-AB cells
+  paCellText: { color: "#94A3B8", fontSize: 10, fontWeight: "700", textAlign: "center" },
 
   // Stat cell with heat-map background
   statCell: {
     width: STAT_W,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: "rgba(51,65,85,0.3)",
   },
-  statCellText: { color: "#E2E8F0", fontSize: 11, fontWeight: "700" },
+  statCellText: { color: "#E2E8F0", fontSize: 10, fontWeight: "700" },
 
   // Averages row
   avgRow: {
     flexDirection: "row",
     borderTopWidth: 1,
     borderTopColor: "#334155",
-    backgroundColor: "rgba(15,23,42,0.5)",
+    backgroundColor: "rgba(15,23,42,0.6)",
     minHeight: 34,
+    alignItems: "center",
   },
   avgLabel: { color: "#94A3B8", fontSize: 11, fontWeight: "800" },
-  avgCellText: { color: "#94A3B8", fontSize: 11, fontWeight: "800", textAlign: "center" },
+  avgCellText: { color: "#94A3B8", fontSize: 10, fontWeight: "800", textAlign: "center" },
 
   // Error / empty
   errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },

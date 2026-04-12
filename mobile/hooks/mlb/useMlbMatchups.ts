@@ -66,10 +66,12 @@ export type MlbBatterVsPitchRow = {
   at_bats?: number | null;
   pitch_pct?: number | null;
   ba?: number | null;
+  obp?: number | null;
   woba?: number | null;
   slg?: number | null;
   iso?: number | null;
   hr?: number | null;
+  k_pct?: number | null;
   ev?: number | null;
   barrel_pct?: number | null;
 };

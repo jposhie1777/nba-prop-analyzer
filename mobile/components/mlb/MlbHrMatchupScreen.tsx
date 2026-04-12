@@ -162,51 +162,54 @@ function aggregateStatsForPitches(
     };
   }
 
-  let totalCount = 0, totalHits = 0, totalHr = 0;
-  let sumBa = 0, sumIso = 0, sumSlg = 0, sumWoba = 0;
-  let hasBa = false, hasIso = false, hasSlg = false, hasWoba = false;
+  let totalPa = 0, totalHits = 0, totalAb = 0, totalHr = 0;
+  let sumBa = 0, sumObp = 0, sumIso = 0, sumSlg = 0, sumWoba = 0, sumKPct = 0, sumEv = 0, sumBarrel = 0;
+  let hasBa = false, hasObp = false, hasIso = false, hasSlg = false, hasWoba = false, hasK = false, hasEv = false, hasBarrel = false;
 
   for (const row of filtered) {
     const count = row.pitch_count ?? row.count ?? 1;
-    totalCount += count;
+    totalPa += count;
     totalHits += row.hits ?? 0;
+    totalAb += row.at_bats ?? count;
     totalHr += row.hr ?? 0;
     if (row.ba != null) { sumBa += row.ba * count; hasBa = true; }
+    if (row.obp != null) { sumObp += row.obp * count; hasObp = true; }
     if (row.iso != null) { sumIso += row.iso * count; hasIso = true; }
     if (row.slg != null) { sumSlg += row.slg * count; hasSlg = true; }
     if (row.woba != null) { sumWoba += row.woba * count; hasWoba = true; }
+    if (row.k_pct != null) { sumKPct += row.k_pct * count; hasK = true; }
+    if (row.ev != null) { sumEv += row.ev * count; hasEv = true; }
+    if (row.barrel_pct != null) { sumBarrel += row.barrel_pct * count; hasBarrel = true; }
   }
 
-  // Compute weighted K% from pitcher pitch mix for the selected pitches
-  let kPct: number | null = null;
-  if (pitcherMixRows && pitcherMixRows.length > 0) {
+  // Fallback K% from pitcher pitch mix if batter pitch rows don't have k_pct
+  if (!hasK && pitcherMixRows && pitcherMixRows.length > 0) {
     const mixFiltered = pitcherMixRows.filter((r) => selectedPitches.has(normPitch(r.pitch_name)));
-    let sumK = 0, sumMixCount = 0;
-    let hasK = false;
+    let sumMixK = 0, sumMixCount = 0;
     for (const m of mixFiltered) {
       const mc = m.pitch_count ?? 1;
-      if (m.k_pct != null) { sumK += m.k_pct * mc; sumMixCount += mc; hasK = true; }
+      if (m.k_pct != null) { sumMixK += m.k_pct * mc; sumMixCount += mc; hasK = true; }
     }
-    if (hasK && sumMixCount > 0) kPct = sumK / sumMixCount;
+    if (hasK && sumMixCount > 0) sumKPct = (sumMixK / sumMixCount) * totalPa;
   }
 
-  const w = totalCount || 1;
+  const w = totalPa || 1;
   const avg = hasBa ? sumBa / w : null;
   const slgVal = hasSlg ? sumSlg / w : (batter.slg ?? null);
   return {
     avg,
-    obp: null,
+    obp: hasObp ? sumObp / w : null,
     iso: hasIso ? sumIso / w : (batter.iso ?? null),
-    barrel_pct_l15: batter.l15_barrel_pct ?? null,
+    barrel_pct_l15: hasBarrel ? sumBarrel / w : (batter.l15_barrel_pct ?? null),
     hh_pct: batter.l15_hard_hit_pct ?? null,
     slg: slgVal,
     woba: hasWoba ? sumWoba / w : null,
-    k_pct: kPct,
-    pa: totalCount > 0 ? totalCount : null,
+    k_pct: hasK ? sumKPct / w : null,
+    pa: totalPa > 0 ? totalPa : null,
     hits: totalHits > 0 ? totalHits : null,
-    at_bats: totalCount > 0 ? totalCount : null,
+    at_bats: totalAb > 0 ? totalAb : null,
     hr: totalHr > 0 ? totalHr : null,
-    avg_ev: batter.season_ev ?? batter.l15_ev ?? null,
+    avg_ev: hasEv ? sumEv / w : (batter.season_ev ?? batter.l15_ev ?? null),
     fb_pct: (batter as any).bvp_batted_ball?.profile?.fb_pct ?? null,
   };
 }

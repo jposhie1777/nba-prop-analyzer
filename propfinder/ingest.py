@@ -17,7 +17,9 @@ v4 changes:
 """
 
 import asyncio
+import csv
 import datetime
+import io
 import logging
 import time
 from zoneinfo import ZoneInfo
@@ -172,6 +174,35 @@ NEW_HR_PICKS_FIELDS = [
     bigquery.SchemaField("fd_selection_id",    "STRING"),
 ]
 
+RAW_STATCAST_BATTER_PITCH_SCHEMA = [
+    bigquery.SchemaField("run_date",          "DATE"),
+    bigquery.SchemaField("batter_id",         "INTEGER"),
+    bigquery.SchemaField("batter_name",       "STRING"),
+    bigquery.SchemaField("game_year",         "INTEGER"),
+    bigquery.SchemaField("pitch_type",        "STRING"),
+    bigquery.SchemaField("pitch_name",        "STRING"),
+    bigquery.SchemaField("p_throws",          "STRING"),
+    bigquery.SchemaField("pa",                "INTEGER"),
+    bigquery.SchemaField("ab",                "INTEGER"),
+    bigquery.SchemaField("hits",              "INTEGER"),
+    bigquery.SchemaField("hr",                "INTEGER"),
+    bigquery.SchemaField("doubles",           "INTEGER"),
+    bigquery.SchemaField("triples",           "INTEGER"),
+    bigquery.SchemaField("so",                "INTEGER"),
+    bigquery.SchemaField("bb",                "INTEGER"),
+    bigquery.SchemaField("hbp",               "INTEGER"),
+    bigquery.SchemaField("avg",               "FLOAT"),
+    bigquery.SchemaField("obp",               "FLOAT"),
+    bigquery.SchemaField("slg",               "FLOAT"),
+    bigquery.SchemaField("iso",               "FLOAT"),
+    bigquery.SchemaField("woba",              "FLOAT"),
+    bigquery.SchemaField("k_pct",             "FLOAT"),
+    bigquery.SchemaField("bb_pct",            "FLOAT"),
+    bigquery.SchemaField("avg_ev",            "FLOAT"),
+    bigquery.SchemaField("barrel_pct",        "FLOAT"),
+    bigquery.SchemaField("ingested_at",       "TIMESTAMP"),
+]
+
 # New columns added idempotently to raw_pitcher_matchup
 NEW_PITCHER_MATCHUP_FIELDS = [
     bigquery.SchemaField("strikeouts",           "INTEGER"),
@@ -269,6 +300,19 @@ def ensure_tables():
             log.info("Added %s columns to hr_picks_daily: %s", len(to_add), [f.name for f in to_add])
     except Exception as exc:
         log.warning("Could not update hr_picks_daily schema: %s", exc)
+
+    # raw_statcast_batter_pitch_stats
+    try:
+        bq.create_table(
+            bigquery.Table(
+                table("raw_statcast_batter_pitch_stats"),
+                schema=RAW_STATCAST_BATTER_PITCH_SCHEMA,
+            ),
+            exists_ok=True,
+        )
+        log.info("raw_statcast_batter_pitch_stats table ready")
+    except Exception as exc:
+        log.warning("Could not create raw_statcast_batter_pitch_stats: %s", exc)
 
     # raw_pitcher_matchup — add strikeout columns idempotently
     try:
@@ -852,6 +896,165 @@ async def fetch_splits(session, batter_id, batter_name):
     return rows
 
 
+STATCAST_SEARCH_URL = "https://baseballsavant.mlb.com/statcast_search/csv"
+
+# Events that are NOT at-bats (excluded from AB denominator)
+_NON_AB_EVENTS = frozenset({
+    "walk", "intent_walk", "hit_by_pitch", "sac_fly", "sac_bunt",
+    "sac_fly_double_play", "sac_bunt_double_play", "catcher_interf",
+})
+_HIT_EVENTS = frozenset({"single", "double", "triple", "home_run"})
+_K_EVENTS = frozenset({"strikeout", "strikeout_double_play"})
+_BB_EVENTS = frozenset({"walk", "intent_walk"})
+
+
+async def fetch_statcast_batter_pitch_stats(session, batter_id, batter_name, season=None):
+    """Fetch pitch-by-pitch Statcast data for a batter and aggregate per pitch type + pitcher hand."""
+    if season is None:
+        season = CURRENT_SEASON
+
+    # Build date range for the season
+    date_gt = f"{season}-02-01"
+    date_lt = f"{season}-11-30"
+
+    params = {
+        "all": "true",
+        "type": "detail",
+        "player_type": "batter",
+        "batters_lookup[]": str(batter_id),
+        "game_date_gt": date_gt,
+        "game_date_lt": date_lt,
+        "group_by": "name-event",
+        "sort_col": "pitches",
+        "player_event_sort": "api_p_release_speed",
+        "sort_order": "desc",
+        "min_pitches": "0",
+        "min_results": "0",
+        "min_pas": "0",
+    }
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with session.get(
+            STATCAST_SEARCH_URL,
+            params=params,
+            timeout=timeout,
+            headers={"User-Agent": "Mozilla/5.0 PulseSports/1.0"},
+        ) as resp:
+            if resp.status != 200:
+                log.warning("Statcast HTTP %s for batter %s", resp.status, batter_id)
+                return []
+            text = await resp.text()
+    except Exception as exc:
+        log.error("Statcast fetch failed batter %s: %s", batter_id, exc)
+        return []
+
+    if not text or len(text) < 50:
+        return []
+
+    # Parse CSV
+    reader = csv.DictReader(io.StringIO(text))
+
+    # Aggregate by (pitch_type, pitch_name, p_throws)
+    groups = {}  # key -> accumulator
+    for row in reader:
+        pt = (row.get("pitch_type") or "").strip()
+        pn = (row.get("pitch_name") or "").strip()
+        hand = (row.get("p_throws") or "").strip().upper()
+        if not pt or not hand or hand not in ("L", "R"):
+            continue
+
+        key = (pt, pn, hand)
+        if key not in groups:
+            groups[key] = {
+                "pa_events": [],
+                "ev_values": [],
+                "barrel_flags": [],  # True/False for batted balls
+            }
+        g = groups[key]
+
+        event = (row.get("events") or "").strip()
+        if event:
+            g["pa_events"].append(event)
+
+        ls = sf(row.get("launch_speed"))
+        if ls is not None:
+            g["ev_values"].append(ls)
+            # launch_speed_angle == 6 means barrel in Statcast
+            lsa = (row.get("launch_speed_angle") or "").strip()
+            g["barrel_flags"].append(lsa == "6")
+
+    # Build output rows
+    out = []
+    for (pt, pn, hand), g in groups.items():
+        events = g["pa_events"]
+        pa = len(events)
+        if pa == 0:
+            continue
+
+        hits = sum(1 for e in events if e in _HIT_EVENTS)
+        hr = sum(1 for e in events if e == "home_run")
+        doubles = sum(1 for e in events if e == "double")
+        triples = sum(1 for e in events if e == "triple")
+        so = sum(1 for e in events if e in _K_EVENTS)
+        bb = sum(1 for e in events if e in _BB_EVENTS)
+        hbp = sum(1 for e in events if e == "hit_by_pitch")
+        sf_count = sum(1 for e in events if e in ("sac_fly", "sac_fly_double_play"))
+        ab = pa - bb - hbp - sf_count - sum(1 for e in events if e in ("sac_bunt", "sac_bunt_double_play", "catcher_interf"))
+
+        avg = round(hits / ab, 3) if ab > 0 else None
+        obp_denom = ab + bb + hbp + sf_count
+        obp = round((hits + bb + hbp) / obp_denom, 3) if obp_denom > 0 else None
+        tb = hits + doubles + 2 * triples + 3 * hr  # singles=1 already in hits, doubles add 1 more, etc.
+        slg = round(tb / ab, 3) if ab > 0 else None
+        iso_val = round((slg - avg), 3) if slg is not None and avg is not None else None
+        k_pct = round((so / pa) * 100, 1) if pa > 0 else None
+        bb_pct = round((bb / pa) * 100, 1) if pa > 0 else None
+
+        # wOBA: we don't have woba_value/woba_denom per pitch, estimate from components
+        # Using 2025 FanGraphs wOBA weights
+        woba_num = 0.69 * bb + 0.72 * hbp + 0.88 * (hits - doubles - triples - hr) + 1.27 * doubles + 1.62 * triples + 2.10 * hr
+        woba = round(woba_num / obp_denom, 3) if obp_denom > 0 else None
+
+        ev_vals = g["ev_values"]
+        avg_ev = round(sum(ev_vals) / len(ev_vals), 1) if ev_vals else None
+        barrels = sum(1 for b in g["barrel_flags"] if b)
+        batted_balls = len(ev_vals)
+        barrel_pct = round((barrels / batted_balls) * 100, 1) if batted_balls > 0 else None
+
+        out.append({
+            "run_date":    TODAY.isoformat(),
+            "batter_id":   batter_id,
+            "batter_name": batter_name,
+            "game_year":   season,
+            "pitch_type":  pt,
+            "pitch_name":  pn,
+            "p_throws":    hand,
+            "pa":          pa,
+            "ab":          ab,
+            "hits":        hits,
+            "hr":          hr,
+            "doubles":     doubles,
+            "triples":     triples,
+            "so":          so,
+            "bb":          bb,
+            "hbp":         hbp,
+            "avg":         avg,
+            "obp":         obp,
+            "slg":         slg,
+            "iso":         iso_val,
+            "woba":        woba,
+            "k_pct":       k_pct,
+            "bb_pct":      bb_pct,
+            "avg_ev":      avg_ev,
+            "barrel_pct":  barrel_pct,
+            "ingested_at": NOW.isoformat(),
+        })
+
+    log.info("fetch_statcast_batter_pitch_stats: batter %s (%s) → %s pitch-type groups", batter_id, batter_name, len(out))
+    return out
+
+
 def pct_from_metric(value):
     raw = sf(value) or 0.0
     return raw * 100 if raw <= 1 else raw
@@ -1260,11 +1463,45 @@ async def main():
         for result in batting_order_results:
             all_batting_order_rows.extend(result)
 
+        # Build batter name map from hit data
+        batter_name_map = {}
+        for row in all_hit_rows:
+            bid = row.get("batter_id")
+            bname = row.get("batter_name")
+            if bid and bname:
+                batter_name_map[bid] = bname
+
+        # ── Step 6c: fetch Statcast batter pitch-type stats ─────────────────
+        all_statcast_rows = []
+        unique_batter_ids = sorted({job["batter_id"] for job in batter_jobs})
+        log.info("Fetching Statcast pitch-type stats for %s unique batters", len(unique_batter_ids))
+
+        STATCAST_BATCH = 5
+        for i in range(0, len(unique_batter_ids), STATCAST_BATCH):
+            batch = unique_batter_ids[i:i + STATCAST_BATCH]
+            batch_results = await asyncio.gather(
+                *[
+                    fetch_statcast_batter_pitch_stats(
+                        session,
+                        bid,
+                        batter_name_map.get(bid, str(bid)),
+                    )
+                    for bid in batch
+                ]
+            )
+            for rows in batch_results:
+                all_statcast_rows.extend(rows)
+            if i + STATCAST_BATCH < len(unique_batter_ids):
+                await asyncio.sleep(1.5)
+
+        log.info("Statcast batter pitch-type rows: %s", len(all_statcast_rows))
+
         bq_insert("raw_hit_data",          all_hit_rows)
         bq_insert("raw_splits",            all_split_rows)
         bq_insert("raw_pitcher_matchup",   all_pitcher_rows)
         bq_insert("raw_pitch_log",         all_pitch_log_rows)
         bq_insert("raw_pitcher_vs_batting_order", all_batting_order_rows)
+        bq_insert("raw_statcast_batter_pitch_stats", all_statcast_rows)
 
         # ── Step 7: insert HR prop odds ───────────────────────────────────────
         all_props_rows = []

@@ -74,6 +74,10 @@ HIT_DATA_TABLE = os.getenv(
     "PROPFINDER_HIT_DATA_TABLE",
     f"{PROPFINDER_DATASET}.raw_hit_data",
 )
+STATCAST_BATTER_PITCH_TABLE = os.getenv(
+    "PROPFINDER_STATCAST_BATTER_PITCH_TABLE",
+    f"{PROPFINDER_DATASET}.raw_statcast_batter_pitch_stats",
+)
 GAME_WEATHER_TABLE = os.getenv(
     "PROPFINDER_GAME_WEATHER_TABLE",
     f"{PROPFINDER_DATASET}.raw_game_weather",
@@ -787,6 +791,7 @@ def _fetch_pitcher_pitch_mix_map(
 
 def _fetch_batter_vs_pitches_map(
     client: bigquery.Client,
+    statcast_table_qualified: str,
     hit_data_table_qualified: str,
     run_date: str,
     game_pk: int,
@@ -795,71 +800,88 @@ def _fetch_batter_vs_pitches_map(
 ) -> Dict[int, Dict[str, List[Dict[str, Any]]]]:
     """
     Build hitter-vs-pitch rows keyed by batter_id and pitcher hand (L/R).
+    Uses Statcast pre-aggregated pitch-type stats when available,
+    falls back to raw_hit_data (batted ball events only).
     """
     batter_ids = sorted({int(bid) for bid in batter_ids if bid is not None})
     if not batter_ids:
         return {}
 
+    # Try the Statcast table first (has full PA-based stats)
     rows = _safe_query(
         client,
         f"""
         SELECT
           CAST(batter_id AS INT64) AS batter_id,
-          UPPER(CAST(pitch_hand AS STRING)) AS pitcher_hand,
-          CAST(pitch_type AS STRING) AS pitch_name,
-          COUNT(1) AS pitch_count,
-          SUM(CASE WHEN LOWER(CAST(result AS STRING)) IN ('single', 'double', 'triple', 'home_run') THEN 1 ELSE 0 END) AS hits,
-          AVG(
-            CASE
-              WHEN LOWER(CAST(result AS STRING)) IN ('single', 'double', 'triple', 'home_run') THEN 1.0
-              ELSE 0.0
-            END
-          ) AS ba,
-          AVG(
-            CASE LOWER(CAST(result AS STRING))
-              WHEN 'single' THEN 0.89
-              WHEN 'double' THEN 1.27
-              WHEN 'triple' THEN 1.62
-              WHEN 'home_run' THEN 2.10
-              ELSE 0.0
-            END
-          ) AS woba,
-          AVG(
-            CASE LOWER(CAST(result AS STRING))
-              WHEN 'single' THEN 1.0
-              WHEN 'double' THEN 2.0
-              WHEN 'triple' THEN 3.0
-              WHEN 'home_run' THEN 4.0
-              ELSE 0.0
-            END
-          ) AS slg,
-          AVG(
-            CASE LOWER(CAST(result AS STRING))
-              WHEN 'double' THEN 1.0
-              WHEN 'triple' THEN 2.0
-              WHEN 'home_run' THEN 3.0
-              ELSE 0.0
-            END
-          ) AS iso,
-          SUM(CASE WHEN LOWER(CAST(result AS STRING)) = 'home_run' THEN 1 ELSE 0 END) AS hr,
-          AVG(CASE WHEN is_barrel THEN 1.0 ELSE 0.0 END) * 100.0 AS barrel_pct,
-          AVG(CAST(launch_speed AS FLOAT64)) AS ev
-        FROM {hit_data_table_qualified}
-        WHERE run_date = @run_date
-          AND CAST(game_pk AS INT64) = @game_pk
-          AND CAST(batter_id AS INT64) IN UNNEST(@batter_ids)
-          AND UPPER(CAST(pitch_hand AS STRING)) IN ('L', 'R', 'LHP', 'RHP')
-          AND COALESCE(CAST(pitch_type AS STRING), '') != ''
-          AND CAST(season AS INT64) = @season
-        GROUP BY batter_id, pitcher_hand, pitch_name
+          UPPER(p_throws) AS pitcher_hand,
+          pitch_name,
+          CAST(pa AS INT64) AS pitch_count,
+          CAST(hits AS INT64) AS hits,
+          CAST(ab AS INT64) AS at_bats,
+          avg AS ba,
+          obp,
+          woba,
+          slg,
+          iso,
+          CAST(hr AS INT64) AS hr,
+          k_pct,
+          bb_pct,
+          avg_ev AS ev,
+          barrel_pct
+        FROM {statcast_table_qualified}
+        WHERE CAST(batter_id AS INT64) IN UNNEST(@batter_ids)
+          AND game_year = @season
+          AND UPPER(p_throws) IN ('L', 'R')
+          AND COALESCE(pitch_name, '') != ''
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY batter_id, pitch_name, p_throws
+          ORDER BY ingested_at DESC NULLS LAST
+        ) = 1
         """,
         [
-            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
-            bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
             bigquery.ArrayQueryParameter("batter_ids", "INT64", batter_ids),
             bigquery.ScalarQueryParameter("season", "INT64", season),
         ],
     )
+
+    # Fallback to raw_hit_data if Statcast table is empty
+    if not rows:
+        rows = _safe_query(
+            client,
+            f"""
+            SELECT
+              CAST(batter_id AS INT64) AS batter_id,
+              UPPER(CAST(pitch_hand AS STRING)) AS pitcher_hand,
+              CAST(pitch_type AS STRING) AS pitch_name,
+              COUNT(1) AS pitch_count,
+              SUM(CASE WHEN LOWER(CAST(result AS STRING)) IN ('single', 'double', 'triple', 'home_run') THEN 1 ELSE 0 END) AS hits,
+              COUNT(1) AS at_bats,
+              AVG(CASE WHEN LOWER(CAST(result AS STRING)) IN ('single', 'double', 'triple', 'home_run') THEN 1.0 ELSE 0.0 END) AS ba,
+              CAST(NULL AS FLOAT64) AS obp,
+              AVG(CASE LOWER(CAST(result AS STRING)) WHEN 'single' THEN 0.89 WHEN 'double' THEN 1.27 WHEN 'triple' THEN 1.62 WHEN 'home_run' THEN 2.10 ELSE 0.0 END) AS woba,
+              AVG(CASE LOWER(CAST(result AS STRING)) WHEN 'single' THEN 1.0 WHEN 'double' THEN 2.0 WHEN 'triple' THEN 3.0 WHEN 'home_run' THEN 4.0 ELSE 0.0 END) AS slg,
+              AVG(CASE LOWER(CAST(result AS STRING)) WHEN 'double' THEN 1.0 WHEN 'triple' THEN 2.0 WHEN 'home_run' THEN 3.0 ELSE 0.0 END) AS iso,
+              SUM(CASE WHEN LOWER(CAST(result AS STRING)) = 'home_run' THEN 1 ELSE 0 END) AS hr,
+              CAST(NULL AS FLOAT64) AS k_pct,
+              CAST(NULL AS FLOAT64) AS bb_pct,
+              AVG(CAST(launch_speed AS FLOAT64)) AS ev,
+              AVG(CASE WHEN is_barrel THEN 1.0 ELSE 0.0 END) * 100.0 AS barrel_pct
+            FROM {hit_data_table_qualified}
+            WHERE run_date = @run_date
+              AND CAST(game_pk AS INT64) = @game_pk
+              AND CAST(batter_id AS INT64) IN UNNEST(@batter_ids)
+              AND UPPER(CAST(pitch_hand AS STRING)) IN ('L', 'R', 'LHP', 'RHP')
+              AND COALESCE(CAST(pitch_type AS STRING), '') != ''
+              AND CAST(season AS INT64) = @season
+            GROUP BY batter_id, pitcher_hand, pitch_name
+            """,
+            [
+                bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+                bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+                bigquery.ArrayQueryParameter("batter_ids", "INT64", batter_ids),
+                bigquery.ScalarQueryParameter("season", "INT64", season),
+            ],
+        )
 
     out: Dict[int, Dict[str, List[Dict[str, Any]]]] = {batter_id: {"L": [], "R": []} for batter_id in batter_ids}
     totals: Dict[tuple[int, str], int] = {}
@@ -879,13 +901,15 @@ def _fetch_batter_vs_pitches_map(
                 "pitch_name": pitch_name,
                 "pitch_count": count,
                 "hits": hits,
-                "at_bats": count,
+                "at_bats": _safe_int(row.get("at_bats")) or count,
                 "pitch_pct": None,
                 "ba": _safe_float(row.get("ba")),
+                "obp": _safe_float(row.get("obp")),
                 "woba": _safe_float(row.get("woba")),
                 "slg": _safe_float(row.get("slg")),
                 "iso": _safe_float(row.get("iso")),
                 "hr": _safe_int(row.get("hr")) or 0,
+                "k_pct": _safe_float(row.get("k_pct")),
                 "ev": _safe_float(row.get("ev")),
                 "barrel_pct": _safe_float(row.get("barrel_pct")),
             }
@@ -1579,9 +1603,10 @@ def mlb_matchup_detail(game_pk: int, season: int = Query(default=2026, ge=2025, 
             run_date, game_pk, pitcher_ids_for_pitch_tables,
             season,
         )
+        statcast_table = _qualified_table(client, STATCAST_BATTER_PITCH_TABLE)
         fut_bvp_pitches = pool.submit(
             _fetch_batter_vs_pitches_map,
-            client, hit_data_table,
+            client, statcast_table, hit_data_table,
             run_date, game_pk, batter_ids_for_pitch_tables,
             season,
         )

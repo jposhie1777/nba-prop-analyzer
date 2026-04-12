@@ -21,7 +21,7 @@ import {
 import { useTheme } from "@/store/useTheme";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
 import { usePropBetslip } from "@/store/usePropBetslip";
-import { buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
+import { buildFanDuelParlay, buildDraftKingsParlay, getBuildPlatform } from "@/utils/parlayBuilder";
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
 
@@ -105,6 +105,18 @@ function heatBg(metric: string, value?: number | null): string {
       if (value <= 25) return "rgba(220,38,38,0.50)";
       if (value <= 30) return "rgba(220,38,38,0.25)";
       return "transparent";
+    case "avg_ev":
+      if (value >= 92) return "rgba(22,163,74,0.55)";
+      if (value >= 89) return "rgba(22,163,74,0.28)";
+      if (value <= 84) return "rgba(220,38,38,0.50)";
+      if (value <= 86) return "rgba(220,38,38,0.25)";
+      return "transparent";
+    case "fb_pct":
+      if (value >= 45) return "rgba(22,163,74,0.55)";
+      if (value >= 38) return "rgba(22,163,74,0.28)";
+      if (value <= 20) return "rgba(220,38,38,0.50)";
+      if (value <= 28) return "rgba(220,38,38,0.25)";
+      return "transparent";
   }
   return "transparent";
 }
@@ -121,8 +133,11 @@ type AggregatedStats = {
   pa: number | null;
   hits: number | null;
   at_bats: number | null;
+  hr: number | null;
+  avg_ev: number | null;
   barrel_pct_l15: number | null;
   hh_pct: number | null;
+  fb_pct: number | null;
 };
 
 function aggregateStatsForPitches(
@@ -141,10 +156,13 @@ function aggregateStatsForPitches(
       slg: batter.slg ?? null,
       woba: null, k_pct: null,
       pa: null, hits: null, at_bats: null,
+      hr: null,
+      avg_ev: batter.season_ev ?? batter.l15_ev ?? null,
+      fb_pct: (batter as any).bvp_batted_ball?.profile?.fb_pct ?? null,
     };
   }
 
-  let totalCount = 0, totalHits = 0;
+  let totalCount = 0, totalHits = 0, totalHr = 0;
   let sumBa = 0, sumIso = 0, sumSlg = 0, sumWoba = 0;
   let hasBa = false, hasIso = false, hasSlg = false, hasWoba = false;
 
@@ -152,6 +170,7 @@ function aggregateStatsForPitches(
     const count = row.pitch_count ?? row.count ?? 1;
     totalCount += count;
     totalHits += row.hits ?? 0;
+    totalHr += row.hr ?? 0;
     if (row.ba != null) { sumBa += row.ba * count; hasBa = true; }
     if (row.iso != null) { sumIso += row.iso * count; hasIso = true; }
     if (row.slg != null) { sumSlg += row.slg * count; hasSlg = true; }
@@ -186,6 +205,9 @@ function aggregateStatsForPitches(
     pa: totalCount > 0 ? totalCount : null,
     hits: totalHits > 0 ? totalHits : null,
     at_bats: totalCount > 0 ? totalCount : null,
+    hr: totalHr > 0 ? totalHr : null,
+    avg_ev: batter.season_ev ?? batter.l15_ev ?? null,
+    fb_pct: (batter as any).bvp_batted_ball?.profile?.fb_pct ?? null,
   };
 }
 
@@ -254,6 +276,8 @@ function HandednessSection({
   pitcherMix,
   pitcherHand,
   weakSpotIds,
+  selectedKeys,
+  onToggleSelect,
 }: {
   label: string;
   pitcherName: string;
@@ -261,6 +285,8 @@ function HandednessSection({
   pitcherMix: MlbPitchMixRow[];
   pitcherHand: string;
   weakSpotIds: Set<number>;
+  selectedKeys?: Set<string>;
+  onToggleSelect?: (batterId: string) => void;
 }) {
   const [selectedPitches, setSelectedPitches] = useState<Set<string>>(() => {
     const over25 = pitcherMix.filter((r) => (r.pitch_pct ?? 0) >= 25);
@@ -303,8 +329,10 @@ function HandednessSection({
   // Compute averages row
   const avgRow = useMemo(() => {
     let count = 0, sumAvg = 0, sumSlg = 0, sumIso = 0, sumWoba = 0, sumKPct = 0;
+    let sumEv = 0, sumBarrel = 0, sumHh = 0, sumFb = 0;
     let hasAvg = false, hasSlg = false, hasIso = false, hasWoba = false, hasK = false;
-    let totalPa = 0, totalHits = 0, totalAb = 0;
+    let hasEv = false, hasBarrel = false, hasHh = false, hasFb = false;
+    let totalPa = 0, totalHits = 0, totalAb = 0, totalHr = 0;
     for (const { stats } of batterStats) {
       count++;
       if (stats.avg != null) { sumAvg += stats.avg; hasAvg = true; }
@@ -312,9 +340,14 @@ function HandednessSection({
       if (stats.iso != null) { sumIso += stats.iso; hasIso = true; }
       if (stats.woba != null) { sumWoba += stats.woba; hasWoba = true; }
       if (stats.k_pct != null) { sumKPct += stats.k_pct; hasK = true; }
+      if (stats.avg_ev != null) { sumEv += stats.avg_ev; hasEv = true; }
+      if (stats.barrel_pct_l15 != null) { sumBarrel += stats.barrel_pct_l15; hasBarrel = true; }
+      if (stats.hh_pct != null) { sumHh += stats.hh_pct; hasHh = true; }
+      if (stats.fb_pct != null) { sumFb += stats.fb_pct; hasFb = true; }
       if (stats.pa != null) totalPa += stats.pa;
       if (stats.hits != null) totalHits += stats.hits;
       if (stats.at_bats != null) totalAb += stats.at_bats;
+      if (stats.hr != null) totalHr += stats.hr;
     }
     const n = count || 1;
     return {
@@ -327,6 +360,11 @@ function HandednessSection({
       iso: hasIso ? sumIso / n : null,
       woba: hasWoba ? sumWoba / n : null,
       k_pct: hasK ? sumKPct / n : null,
+      hr: totalHr || null,
+      avg_ev: hasEv ? sumEv / n : null,
+      barrel_pct: hasBarrel ? sumBarrel / n : null,
+      hh_pct: hasHh ? sumHh / n : null,
+      fb_pct: hasFb ? sumFb / n : null,
     };
   }, [batterStats]);
 
@@ -389,6 +427,7 @@ function HandednessSection({
         <View>
           {/* Column headers */}
           <View style={s.tableHeaderRow}>
+            {onToggleSelect ? <View style={s.checkCol}><Text style={s.colHeader}>+</Text></View> : null}
             <View style={s.rankCol}><Text style={s.colHeader}>#</Text></View>
             <View style={s.playerCol}><Text style={[s.colHeader, { textAlign: "left" }]}>PLAYER</Text></View>
             <View style={s.paCol}><Text style={s.colHeader}>PA</Text></View>
@@ -399,16 +438,28 @@ function HandednessSection({
             <View style={s.statColHdr}><Text style={s.colHeader}>ISO</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>wOBA</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>K%</Text></View>
+            <View style={s.hrCol}><Text style={s.colHeader}>HR</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>AVG EV</Text></View>
+            <View style={s.statColHdr}><Text style={[s.colHeader, { fontSize: 8 }]}>BARREL%</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>HH%</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>FB%</Text></View>
           </View>
 
           {/* Batter rows */}
           {batterStats.map(({ batter, stats }, idx) => {
             const isWeakSpot = batter.batter_id != null && weakSpotIds.has(batter.batter_id);
+            const batterId = String(batter.batter_id ?? batter.batter_name ?? "");
+            const isSelected = selectedKeys?.has(batterId) ?? false;
             return (
               <View
                 key={String(batter.batter_id ?? batter.batter_name ?? idx)}
-                style={[s.tableRow, isWeakSpot ? s.tableRowWeak : null]}
+                style={[s.tableRow, isWeakSpot ? s.tableRowWeak : null, isSelected ? s.tableRowSelected : null]}
               >
+                {onToggleSelect ? (
+                  <Pressable style={s.checkCol} onPress={() => onToggleSelect(batterId)}>
+                    <Text style={isSelected ? s.checkOn : s.checkOff}>{isSelected ? "☑" : "☐"}</Text>
+                  </Pressable>
+                ) : null}
                 <View style={s.rankCol}>
                   <Text style={s.playerRank}>{idx + 1}</Text>
                 </View>
@@ -432,6 +483,13 @@ function HandednessSection({
                 <StatCell metric="iso" value={stats.iso} display={fmt(stats.iso)} />
                 <StatCell metric="woba" value={stats.woba} display={fmt(stats.woba)} />
                 <StatCell metric="k_pct" value={stats.k_pct} display={stats.k_pct != null ? `${stats.k_pct.toFixed(0)}%` : "—"} />
+                <View style={s.hrCol}>
+                  <Text style={s.paCellText}>{stats.hr ?? "—"}</Text>
+                </View>
+                <StatCell metric="avg_ev" value={stats.avg_ev} display={stats.avg_ev != null ? stats.avg_ev.toFixed(1) : "—"} />
+                <StatCell metric="barrel_pct" value={stats.barrel_pct_l15} display={fmtPct(stats.barrel_pct_l15)} />
+                <StatCell metric="hh_pct" value={stats.hh_pct} display={fmtPct(stats.hh_pct)} />
+                <StatCell metric="fb_pct" value={stats.fb_pct} display={fmtPct(stats.fb_pct)} />
               </View>
             );
           })}
@@ -439,6 +497,7 @@ function HandednessSection({
           {/* Averages row */}
           {batterStats.length > 0 ? (
             <View style={s.avgRow}>
+              {onToggleSelect ? <View style={s.checkCol} /> : null}
               <View style={s.rankCol} />
               <View style={s.playerCol}>
                 <Text style={s.avgLabel}>
@@ -457,6 +516,13 @@ function HandednessSection({
               <StatCell metric="iso" value={avgRow.iso} display={fmt(avgRow.iso)} />
               <StatCell metric="woba" value={avgRow.woba} display={fmt(avgRow.woba)} />
               <StatCell metric="k_pct" value={avgRow.k_pct} display={avgRow.k_pct != null ? `${avgRow.k_pct.toFixed(0)}%` : "—"} />
+              <View style={s.hrCol}>
+                <Text style={s.avgCellText}>{avgRow.hr ?? "—"}</Text>
+              </View>
+              <StatCell metric="avg_ev" value={avgRow.avg_ev} display={avgRow.avg_ev != null ? avgRow.avg_ev.toFixed(1) : "—"} />
+              <StatCell metric="barrel_pct" value={avgRow.barrel_pct} display={fmtPct(avgRow.barrel_pct)} />
+              <StatCell metric="hh_pct" value={avgRow.hh_pct} display={fmtPct(avgRow.hh_pct)} />
+              <StatCell metric="fb_pct" value={avgRow.fb_pct} display={fmtPct(avgRow.fb_pct)} />
             </View>
           ) : null}
         </View>
@@ -799,6 +865,8 @@ export function MlbHrMatchupScreen() {
         odds: Number(found.hr_odds_best_price ?? 100),
         sport: "mlb",
         bookmaker: null,
+        dk_outcome_code: found.dk_outcome_code ?? null,
+        dk_event_id: found.dk_event_id ?? null,
         fd_market_id: found.fd_market_id ?? null,
         fd_selection_id: found.fd_selection_id ?? null,
       });
@@ -812,6 +880,18 @@ export function MlbHrMatchupScreen() {
       mlbItems.map((i) => ({
         fd_market_id: i.fd_market_id ?? null,
         fd_selection_id: i.fd_selection_id ?? null,
+      })),
+      platform
+    );
+  }, [slipItems, platform]);
+
+  const dkLink = useMemo(() => {
+    const mlbItems = slipItems.filter((i) => i.sport === "mlb" && i.market === "MLB 1+ HR");
+    if (mlbItems.length === 0) return null;
+    return buildDraftKingsParlay(
+      mlbItems.map((i) => ({
+        dk_outcome_code: i.dk_outcome_code ?? null,
+        dk_event_id: i.dk_event_id ?? null,
       })),
       platform
     );
@@ -908,6 +988,22 @@ export function MlbHrMatchupScreen() {
         </View>
       </View>
 
+      {/* Season toggle */}
+      <View style={s.seasonRow}>
+        <Pressable
+          style={[s.seasonBtn, season === 2025 ? s.seasonBtnActive : s.seasonBtnInactive]}
+          onPress={() => setSeason(2025)}
+        >
+          <Text style={season === 2025 ? s.seasonBtnTextActive : s.seasonBtnTextInactive}>2025</Text>
+        </Pressable>
+        <Pressable
+          style={[s.seasonBtn, season === 2026 ? s.seasonBtnActive : s.seasonBtnInactive]}
+          onPress={() => setSeason(2026)}
+        >
+          <Text style={season === 2026 ? s.seasonBtnTextActive : s.seasonBtnTextInactive}>2026</Text>
+        </Pressable>
+      </View>
+
       {loading ? <ActivityIndicator color="#93C5FD" /> : null}
 
       {error ? (
@@ -952,6 +1048,8 @@ export function MlbHrMatchupScreen() {
               pitcherMix={mixVsRhb}
               pitcherHand={pitcherHandRaw}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
+              selectedKeys={selectedKeys}
+              onToggleSelect={toggleSelect}
             />
 
             <HandednessSection
@@ -961,6 +1059,8 @@ export function MlbHrMatchupScreen() {
               pitcherMix={mixVsLhb}
               pitcherHand={pitcherHandRaw}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
+              selectedKeys={selectedKeys}
+              onToggleSelect={toggleSelect}
             />
 
             {/* Collapsible pitcher pitch mix breakdown */}
@@ -1007,12 +1107,21 @@ export function MlbHrMatchupScreen() {
         </View>
         <View style={s.parlayBtnRow}>
           <Pressable
+            style={[s.parlayBtn, !dkLink ? s.parlayBtnDisabled : null]}
+            disabled={!dkLink}
+            onPress={() => openUrl(dkLink)}
+          >
+            <Text style={s.parlayBtnText}>
+              {mlbSlipItems.length === 1 ? "Bet DraftKings" : `DK Parlay (${mlbSlipItems.length})`}
+            </Text>
+          </Pressable>
+          <Pressable
             style={[s.parlayBtn, !fdLink ? s.parlayBtnDisabled : null]}
             disabled={!fdLink}
             onPress={() => openUrl(fdLink)}
           >
             <Text style={s.parlayBtnText}>
-              {mlbSlipItems.length === 1 ? "Bet FanDuel" : `Parlay on FanDuel (${mlbSlipItems.length} legs)`}
+              {mlbSlipItems.length === 1 ? "Bet FanDuel" : `FD Parlay (${mlbSlipItems.length})`}
             </Text>
           </Pressable>
         </View>
@@ -1030,6 +1139,8 @@ const PLAYER_W = 130;
 const PA_W = 34;
 const RANK_W = 22;
 const HAB_W = 52;
+const CHECK_W = 30;
+const HR_W = 30;
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050A18" },
@@ -1144,6 +1255,8 @@ const s = StyleSheet.create({
   paCol: { width: PA_W, alignItems: "center", justifyContent: "center" },
   habCol: { width: HAB_W, alignItems: "center", justifyContent: "center" },
   statColHdr: { width: STAT_W, alignItems: "center", justifyContent: "center" },
+  checkCol: { width: CHECK_W, alignItems: "center", justifyContent: "center" },
+  hrCol: { width: HR_W, alignItems: "center", justifyContent: "center" },
 
   // Table row
   tableRow: {
@@ -1157,6 +1270,13 @@ const s = StyleSheet.create({
     borderLeftWidth: 2,
     borderLeftColor: "#10B981",
   },
+  tableRowSelected: {
+    backgroundColor: "rgba(16,185,129,0.08)",
+  },
+
+  // Checkbox
+  checkOn: { color: "#10B981", fontSize: 16, fontWeight: "800" },
+  checkOff: { color: "#475569", fontSize: 16 },
 
   // Player info in row
   playerRank: { color: "#475569", fontSize: 10, fontWeight: "700", textAlign: "center" },

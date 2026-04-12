@@ -465,6 +465,130 @@ function HandednessSection({
   );
 }
 
+// ── Collapsible Pitcher Pitch Mix section ────────────────────────────────────
+
+const MIX_TYPE_W = 100;
+const MIX_NUM_W = 34;
+const MIX_PCT_W = 42;
+const MIX_STAT_W = 50;
+
+function PitchMixStatCell({ metric, value, display }: { metric: string; value?: number | null; display: string }) {
+  return (
+    <View style={[s.mixStatCell, { backgroundColor: heatBg(metric, value) }]}>
+      <Text style={s.mixStatCellText}>{display}</Text>
+    </View>
+  );
+}
+
+function PitcherPitchMixSection({
+  pitcherName,
+  pitcherHand,
+  mixVsLhb,
+  mixVsRhb,
+}: {
+  pitcherName: string;
+  pitcherHand: string;
+  mixVsLhb: MlbPitchMixRow[];
+  mixVsRhb: MlbPitchMixRow[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [handTab, setHandTab] = useState<"lhb" | "rhb">("rhb");
+  const pitcherHandLabel = (pitcherHand ?? "R").toUpperCase().startsWith("L") ? "LHP" : "RHP";
+  const rows = handTab === "lhb" ? mixVsLhb : mixVsRhb;
+
+  if (mixVsLhb.length === 0 && mixVsRhb.length === 0) return null;
+
+  return (
+    <View style={s.mixSection}>
+      <Pressable style={s.mixToggleRow} onPress={() => setExpanded((e) => !e)}>
+        <View style={s.mixToggleLeft}>
+          <Text style={s.mixToggleChevron}>{expanded ? "▾" : "▸"}</Text>
+          <Text style={s.mixToggleTitle}>Pitch Mix</Text>
+          <Text style={s.mixToggleSub}>{pitcherName}</Text>
+          <View style={s.pitcherHandBadge}>
+            <Text style={s.pitcherHandText}>{pitcherHandLabel}</Text>
+          </View>
+        </View>
+      </Pressable>
+
+      {expanded ? (
+        <View style={s.mixContent}>
+          {/* vs LHB / vs RHB tabs */}
+          <View style={s.mixTabRow}>
+            <Pressable
+              style={[s.mixTab, handTab === "lhb" ? s.mixTabActive : s.mixTabInactive]}
+              onPress={() => setHandTab("lhb")}
+            >
+              <Text style={handTab === "lhb" ? s.mixTabTextActive : s.mixTabTextInactive}>vs LHB</Text>
+            </Pressable>
+            <Pressable
+              style={[s.mixTab, handTab === "rhb" ? s.mixTabActive : s.mixTabInactive]}
+              onPress={() => setHandTab("rhb")}
+            >
+              <Text style={handTab === "rhb" ? s.mixTabTextActive : s.mixTabTextInactive}>vs RHB</Text>
+            </Pressable>
+          </View>
+
+          {/* Pitch mix table */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View>
+              {/* Header */}
+              <View style={s.mixHeaderRow}>
+                <View style={{ width: MIX_TYPE_W, paddingLeft: 4 }}><Text style={s.colHeader}>TYPE</Text></View>
+                <View style={{ width: MIX_NUM_W, alignItems: "center" }}><Text style={s.colHeader}>#</Text></View>
+                <View style={{ width: MIX_PCT_W, alignItems: "center" }}><Text style={s.colHeader}>%</Text></View>
+                <View style={{ width: MIX_STAT_W, alignItems: "center" }}><Text style={s.colHeader}>BA</Text></View>
+                <View style={{ width: MIX_STAT_W, alignItems: "center" }}><Text style={s.colHeader}>wOBA</Text></View>
+                <View style={{ width: MIX_STAT_W, alignItems: "center" }}><Text style={s.colHeader}>SLG</Text></View>
+                <View style={{ width: MIX_STAT_W, alignItems: "center" }}><Text style={s.colHeader}>ISO</Text></View>
+                <View style={{ width: MIX_NUM_W, alignItems: "center" }}><Text style={s.colHeader}>HR</Text></View>
+                <View style={{ width: MIX_STAT_W, alignItems: "center" }}><Text style={s.colHeader}>K%</Text></View>
+                <View style={{ width: MIX_STAT_W, alignItems: "center" }}><Text style={s.colHeader}>WHIFF%</Text></View>
+              </View>
+
+              {/* Rows */}
+              {rows.map((row, idx) => {
+                const color = pitchColor(row.pitch_name);
+                return (
+                  <View key={`${row.pitch_name}-${idx}`} style={s.mixDataRow}>
+                    <View style={{ width: MIX_TYPE_W, paddingLeft: 4, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <View style={[s.mixPitchDot, { backgroundColor: color }]} />
+                      <Text style={s.mixPitchName} numberOfLines={1}>{row.pitch_name ?? "—"}</Text>
+                    </View>
+                    <View style={{ width: MIX_NUM_W, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={s.mixNumText}>{row.pitch_count ?? "—"}</Text>
+                    </View>
+                    <View style={{ width: MIX_PCT_W, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={s.mixNumText}>
+                        {row.pitch_pct != null ? `${row.pitch_pct.toFixed(1)}%` : "—"}
+                      </Text>
+                    </View>
+                    <PitchMixStatCell metric="avg" value={row.ba} display={fmt(row.ba)} />
+                    <PitchMixStatCell metric="woba" value={row.woba} display={fmt(row.woba)} />
+                    <PitchMixStatCell metric="slg" value={row.slg} display={fmt(row.slg)} />
+                    <PitchMixStatCell metric="iso" value={row.iso} display={fmt(row.iso)} />
+                    <View style={{ width: MIX_NUM_W, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={s.mixNumText}>{row.hr ?? 0}</Text>
+                    </View>
+                    <PitchMixStatCell metric="k_pct" value={row.k_pct} display={row.k_pct != null ? `${row.k_pct.toFixed(1)}%` : "—"} />
+                    <View style={[s.mixStatCell, { backgroundColor: heatBg("k_pct", row.whiff_pct) }]}>
+                      <Text style={s.mixStatCellText}>{row.whiff_pct != null ? `${row.whiff_pct.toFixed(1)}%` : "—"}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+
+              {rows.length === 0 ? (
+                <Text style={[s.emptyText, { padding: 8 }]}>No pitch data for this split.</Text>
+              ) : null}
+            </View>
+          </ScrollView>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 // ── Reusable game content (pitcher panels + batter rows) ───────────────────
 
 export function HrMatchupGameContent({
@@ -562,6 +686,14 @@ export function HrMatchupGameContent({
               pitcherMix={mixVsLhb}
               pitcherHand={pitcherHandRaw}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
+            />
+
+            {/* Collapsible pitcher pitch mix breakdown */}
+            <PitcherPitchMixSection
+              pitcherName={pitcher.pitcher_name ?? "Pitcher"}
+              pitcherHand={pitcherHandRaw}
+              mixVsLhb={mixVsLhb}
+              mixVsRhb={mixVsRhb}
             />
 
             {!batters.length ? (
@@ -813,6 +945,14 @@ export function MlbHrMatchupScreen() {
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
             />
 
+            {/* Collapsible pitcher pitch mix breakdown */}
+            <PitcherPitchMixSection
+              pitcherName={pitcher.pitcher_name ?? "Pitcher"}
+              pitcherHand={pitcherHandRaw}
+              mixVsLhb={mixVsLhb}
+              mixVsRhb={mixVsRhb}
+            />
+
             {!batters.length ? (
               <Text style={s.emptyText}>No hitter data for this pitcher.</Text>
             ) : null}
@@ -1031,6 +1171,66 @@ const s = StyleSheet.create({
   },
   avgLabel: { color: "#94A3B8", fontSize: 11, fontWeight: "800" },
   avgCellText: { color: "#94A3B8", fontSize: 10, fontWeight: "800", textAlign: "center" },
+
+  // Pitcher Pitch Mix collapsible section
+  mixSection: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#1E293B",
+    paddingTop: 8,
+  },
+  mixToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  mixToggleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+  },
+  mixToggleChevron: { color: "#64748B", fontSize: 12, width: 14 },
+  mixToggleTitle: { color: "#E5E7EB", fontSize: 13, fontWeight: "800" },
+  mixToggleSub: { color: "#94A3B8", fontSize: 12, fontWeight: "600" },
+  mixContent: { gap: 8, marginTop: 4 },
+  mixTabRow: { flexDirection: "row", gap: 0 },
+  mixTab: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  mixTabActive: { backgroundColor: "rgba(99,102,241,0.25)" },
+  mixTabInactive: { backgroundColor: "transparent" },
+  mixTabTextActive: { color: "#A5B4FC", fontSize: 11, fontWeight: "800" },
+  mixTabTextInactive: { color: "#64748B", fontSize: 11, fontWeight: "700" },
+  mixHeaderRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#334155",
+    paddingBottom: 6,
+    paddingTop: 2,
+    alignItems: "center",
+  },
+  mixDataRow: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(51,65,85,0.4)",
+    minHeight: 34,
+    alignItems: "center",
+  },
+  mixPitchDot: { width: 8, height: 8, borderRadius: 4 },
+  mixPitchName: { color: "#E5E7EB", fontSize: 11, fontWeight: "700", flex: 1 },
+  mixNumText: { color: "#94A3B8", fontSize: 10, fontWeight: "700" },
+  mixStatCell: {
+    width: MIX_STAT_W,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 6,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: "rgba(51,65,85,0.3)",
+  },
+  mixStatCellText: { color: "#E2E8F0", fontSize: 10, fontWeight: "700" },
 
   // Error / empty
   errorBox: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, backgroundColor: "#1F2937", padding: 12 },

@@ -432,17 +432,17 @@ function HandednessSection({
             <View style={s.playerCol}><Text style={[s.colHeader, { textAlign: "left" }]}>PLAYER</Text></View>
             <View style={s.paCol}><Text style={s.colHeader}>PA</Text></View>
             <View style={s.habCol}><Text style={s.colHeader}>H-AB</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>AVG</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>OBP</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>SLG</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>ISO</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>wOBA</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>K%</Text></View>
             <View style={s.hrCol}><Text style={s.colHeader}>HR</Text></View>
-            <View style={s.statColHdr}><Text style={s.colHeader}>AVG EV</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>AVG</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>ISO</Text></View>
             <View style={s.statColHdr}><Text style={[s.colHeader, { fontSize: 8 }]}>BARREL%</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>HH%</Text></View>
             <View style={s.statColHdr}><Text style={s.colHeader}>FB%</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>AVG EV</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>SLG</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>wOBA</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>K%</Text></View>
+            <View style={s.statColHdr}><Text style={s.colHeader}>OBP</Text></View>
           </View>
 
           {/* Batter rows */}
@@ -477,19 +477,19 @@ function HandednessSection({
                 <View style={s.habCol}>
                   <Text style={s.paCellText}>{fmtHAB(stats.hits, stats.at_bats)}</Text>
                 </View>
-                <StatCell metric="avg" value={stats.avg} display={fmt(stats.avg)} />
-                <StatCell metric="obp" value={stats.obp} display={fmt(stats.obp)} />
-                <StatCell metric="slg" value={stats.slg} display={fmt(stats.slg)} />
-                <StatCell metric="iso" value={stats.iso} display={fmt(stats.iso)} />
-                <StatCell metric="woba" value={stats.woba} display={fmt(stats.woba)} />
-                <StatCell metric="k_pct" value={stats.k_pct} display={stats.k_pct != null ? `${stats.k_pct.toFixed(0)}%` : "—"} />
                 <View style={s.hrCol}>
                   <Text style={s.paCellText}>{stats.hr ?? "—"}</Text>
                 </View>
-                <StatCell metric="avg_ev" value={stats.avg_ev} display={stats.avg_ev != null ? stats.avg_ev.toFixed(1) : "—"} />
+                <StatCell metric="avg" value={stats.avg} display={fmt(stats.avg)} />
+                <StatCell metric="iso" value={stats.iso} display={fmt(stats.iso)} />
                 <StatCell metric="barrel_pct" value={stats.barrel_pct_l15} display={fmtPct(stats.barrel_pct_l15)} />
                 <StatCell metric="hh_pct" value={stats.hh_pct} display={fmtPct(stats.hh_pct)} />
                 <StatCell metric="fb_pct" value={stats.fb_pct} display={fmtPct(stats.fb_pct)} />
+                <StatCell metric="avg_ev" value={stats.avg_ev} display={stats.avg_ev != null ? stats.avg_ev.toFixed(1) : "—"} />
+                <StatCell metric="slg" value={stats.slg} display={fmt(stats.slg)} />
+                <StatCell metric="woba" value={stats.woba} display={fmt(stats.woba)} />
+                <StatCell metric="k_pct" value={stats.k_pct} display={stats.k_pct != null ? `${stats.k_pct.toFixed(0)}%` : "—"} />
+                <StatCell metric="obp" value={stats.obp} display={fmt(stats.obp)} />
               </View>
             );
           })}
@@ -510,19 +510,19 @@ function HandednessSection({
               <View style={s.habCol}>
                 <Text style={s.avgCellText}>{fmtHAB(avgRow.hits, avgRow.at_bats)}</Text>
               </View>
-              <StatCell metric="avg" value={avgRow.avg} display={fmt(avgRow.avg)} />
-              <StatCell metric="obp" value={avgRow.obp} display={fmt(avgRow.obp)} />
-              <StatCell metric="slg" value={avgRow.slg} display={fmt(avgRow.slg)} />
-              <StatCell metric="iso" value={avgRow.iso} display={fmt(avgRow.iso)} />
-              <StatCell metric="woba" value={avgRow.woba} display={fmt(avgRow.woba)} />
-              <StatCell metric="k_pct" value={avgRow.k_pct} display={avgRow.k_pct != null ? `${avgRow.k_pct.toFixed(0)}%` : "—"} />
               <View style={s.hrCol}>
                 <Text style={s.avgCellText}>{avgRow.hr ?? "—"}</Text>
               </View>
-              <StatCell metric="avg_ev" value={avgRow.avg_ev} display={avgRow.avg_ev != null ? avgRow.avg_ev.toFixed(1) : "—"} />
+              <StatCell metric="avg" value={avgRow.avg} display={fmt(avgRow.avg)} />
+              <StatCell metric="iso" value={avgRow.iso} display={fmt(avgRow.iso)} />
               <StatCell metric="barrel_pct" value={avgRow.barrel_pct} display={fmtPct(avgRow.barrel_pct)} />
               <StatCell metric="hh_pct" value={avgRow.hh_pct} display={fmtPct(avgRow.hh_pct)} />
               <StatCell metric="fb_pct" value={avgRow.fb_pct} display={fmtPct(avgRow.fb_pct)} />
+              <StatCell metric="avg_ev" value={avgRow.avg_ev} display={avgRow.avg_ev != null ? avgRow.avg_ev.toFixed(1) : "—"} />
+              <StatCell metric="slg" value={avgRow.slg} display={fmt(avgRow.slg)} />
+              <StatCell metric="woba" value={avgRow.woba} display={fmt(avgRow.woba)} />
+              <StatCell metric="k_pct" value={avgRow.k_pct} display={avgRow.k_pct != null ? `${avgRow.k_pct.toFixed(0)}%` : "—"} />
+              <StatCell metric="obp" value={avgRow.obp} display={fmt(avgRow.obp)} />
             </View>
           ) : null}
         </View>
@@ -760,6 +760,8 @@ export function HrMatchupGameContent({
               pitcherMix={mixVsRhb}
               pitcherHand={pitcherHandRaw}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
+              selectedKeys={selectedKeys}
+              onToggleSelect={onToggleSelect}
             />
 
             <HandednessSection
@@ -769,6 +771,8 @@ export function HrMatchupGameContent({
               pitcherMix={mixVsLhb}
               pitcherHand={pitcherHandRaw}
               weakSpotIds={weakSpotMap.get(pitcher.pitcher_id ?? -1) ?? new Set()}
+              selectedKeys={selectedKeys}
+              onToggleSelect={onToggleSelect}
             />
 
             {/* Collapsible pitcher pitch mix breakdown */}

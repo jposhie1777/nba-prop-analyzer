@@ -959,11 +959,21 @@ async def fetch_statcast_batter_pitch_stats(session, batter_id, batter_name, sea
     # Parse CSV
     reader = csv.DictReader(io.StringIO(text))
 
+    # Normalize Statcast pitch names to PropFinder convention
+    _PITCH_NAME_MAP = {
+        "4-Seam Fastball": "Four-seam FB",
+        "4-seam fastball": "Four-seam FB",
+        "2-Seam Fastball": "Sinker",
+        "Knuckle Curve": "Knuckle Curve",
+        "Slow Curve": "Curveball",
+    }
+
     # Aggregate by (pitch_type, pitch_name, p_throws)
     groups = {}  # key -> accumulator
     for row in reader:
         pt = (row.get("pitch_type") or "").strip()
         pn = (row.get("pitch_name") or "").strip()
+        pn = _PITCH_NAME_MAP.get(pn, pn)  # normalize to PropFinder names
         hand = (row.get("p_throws") or "").strip().upper()
         if not pt or not hand or hand not in ("L", "R"):
             continue
@@ -981,12 +991,15 @@ async def fetch_statcast_batter_pitch_stats(session, batter_id, batter_name, sea
         if event:
             g["pa_events"].append(event)
 
-        ls = sf(row.get("launch_speed"))
-        if ls is not None:
-            g["ev_values"].append(ls)
-            # launch_speed_angle == 6 means barrel in Statcast
-            lsa = (row.get("launch_speed_angle") or "").strip()
-            g["barrel_flags"].append(lsa == "6")
+        # Only record EV for batted ball events (non-empty launch_speed)
+        ls_raw = (row.get("launch_speed") or "").strip()
+        if ls_raw:
+            ls = sf(ls_raw)
+            if ls is not None and ls > 0:
+                g["ev_values"].append(ls)
+                # launch_speed_angle == 6 means barrel in Statcast
+                lsa = (row.get("launch_speed_angle") or "").strip()
+                g["barrel_flags"].append(lsa == "6")
 
     # Build output rows
     out = []

@@ -300,9 +300,11 @@ def _extract_market_names_from_nav(data: Dict[str, Any]) -> Dict[str, str]:
 
 def _extract_per_event_data(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     """
-    Extract market IDs, player names, and market names grouped by eventId.
+    Extract market IDs, player names, market names, and raw market dicts
+    grouped by eventId.
 
-    Returns: { eventId: { "market_ids": set, "player_map": dict, "market_name_map": dict } }
+    Returns: { eventId: { "market_ids": set, "player_map": dict,
+               "market_name_map": dict, "raw_markets": list } }
     """
     per_event: Dict[str, Dict[str, Any]] = {}
 
@@ -319,8 +321,15 @@ def _extract_per_event_data(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
                 "market_ids": set(),
                 "player_map": {},
                 "market_name_map": {},
+                "raw_markets": [],
             }
         bucket = per_event[event_id]
+
+        # Store the raw market dict so we can parse odds directly from nav.
+        # Ensure marketId is set (dict key is the ID, may not be inside the dict).
+        if "marketId" not in market:
+            market = {**market, "marketId": market_id}
+        bucket["raw_markets"].append(market)
 
         # Use dict key (internal marketId) — getMarketPrices needs internal IDs
         internal_id = str(market_id)
@@ -594,7 +603,7 @@ def _parse_market_prices_response(
             or market.get("name")
             or ""
         )
-        runners = market.get("runnerDetails", [])
+        runners = market.get("runnerDetails") or market.get("runners") or []
 
         if not market_id or not runners:
             continue
@@ -840,14 +849,29 @@ def scrape(dry_run: bool = False) -> List[Dict[str, Any]]:
             len(market_name_map), "YES" if px_context else "NO",
         )
 
-        rows = _fetch_market_prices(
-            sorted(market_ids),
+        # Phase 1: Try parsing odds directly from nav data (browser already
+        # fetched this — no TLS fingerprint issues). Same approach as ATP scraper.
+        raw_markets = evt_data.get("raw_markets", []) if evt_data else []
+        rows = _parse_market_prices_response(
+            raw_markets,
             scraped_at=scraped_at,
             event_name=resolved_event_name,
             player_map=player_map,
             market_name_map=market_name_map,
-            px_context=px_context,
         )
+        if rows:
+            logger.info("  → %d rows from nav data (no API call needed)", len(rows))
+        else:
+            # Phase 2: Fall back to direct getMarketPrices POST
+            logger.info("Nav data had no odds — falling back to getMarketPrices API")
+            rows = _fetch_market_prices(
+                sorted(market_ids),
+                scraped_at=scraped_at,
+                event_name=resolved_event_name,
+                player_map=player_map,
+                market_name_map=market_name_map,
+                px_context=px_context,
+            )
 
         # Tag every row with tournament metadata for multi-event support
         for row in rows:

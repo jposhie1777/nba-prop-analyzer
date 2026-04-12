@@ -952,6 +952,10 @@ async def fetch_statcast_batter_pitch_stats(session, batter_id, batter_name, sea
     if not text or len(text) < 50:
         return []
 
+    # Strip BOM if present (Baseball Savant CSV starts with \ufeff)
+    if text.startswith("\ufeff"):
+        text = text[1:]
+
     # Parse CSV
     reader = csv.DictReader(io.StringIO(text))
 

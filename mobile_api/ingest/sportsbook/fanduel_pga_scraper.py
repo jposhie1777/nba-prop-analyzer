@@ -5,7 +5,7 @@ Architecture:
   1. Discovers ALL available golf events from FanDuel application-context API
   2. For each tournament, loads its page via Camoufox and captures XHRs
   3. From captured requests:
-       - Navigation response body  → all externalMarketIds + player names
+       - Navigation response body  → all internal marketIds + player names
        - getMarketPrices POST bodies → additional marketIds
        - Any request headers       → x-px-context token
   4. POSTs all discovered marketIds to getMarketPrices directly (with px token)
@@ -245,14 +245,16 @@ def _scrape_golf_landing() -> Tuple[
 # ---------------------------------------------------------------------------
 
 def _extract_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
+    """Extract internal marketIds (not externalMarketId) for getMarketPrices."""
     market_ids: Set[str] = set()
     coupons = data.get("layout", {}).get("coupons", {})
     for coupon in coupons.values():
         if not isinstance(coupon, dict):
             continue
-        ext_id = coupon.get("externalMarketId")
-        if ext_id:
-            market_ids.add(str(ext_id))
+        # Prefer marketId (internal) over externalMarketId
+        mid = coupon.get("marketId") or coupon.get("externalMarketId")
+        if mid:
+            market_ids.add(str(mid))
         for display_item in coupon.get("display", []):
             if not isinstance(display_item, dict):
                 continue
@@ -262,30 +264,34 @@ def _extract_market_ids_from_nav(data: Dict[str, Any]) -> Set[str]:
                 for mid in row.get("marketIds", []):
                     if mid:
                         market_ids.add(str(mid))
-    for market in data.get("attachments", {}).get("markets", {}).values():
+    # Dict keys in attachments.markets ARE the internal marketIds
+    for market_id, market in data.get("attachments", {}).get("markets", {}).items():
         if not isinstance(market, dict):
             continue
+        market_ids.add(str(market_id))
         for assoc in market.get("associatedMarkets", []):
-            if isinstance(assoc, dict) and assoc.get("externalMarketId"):
-                market_ids.add(str(assoc["externalMarketId"]))
+            if isinstance(assoc, dict):
+                aid = assoc.get("marketId") or assoc.get("externalMarketId")
+                if aid:
+                    market_ids.add(str(aid))
     return market_ids
 
 
 def _extract_market_names_from_nav(data: Dict[str, Any]) -> Dict[str, str]:
-    """Build externalMarketId → marketName from navigation attachments."""
+    """Build internal marketId → marketName from navigation attachments."""
     market_names: Dict[str, str] = {}
     for market_id, market in data.get("attachments", {}).get("markets", {}).items():
         if not isinstance(market, dict):
             continue
         name = market.get("marketName") or market.get("name") or ""
-        ext_id = market.get("externalMarketId") or market_id
-        if ext_id and name:
-            market_names[str(ext_id)] = name
+        # Use dict key (internal marketId) to match getMarketPrices response
+        if market_id and name:
+            market_names[str(market_id)] = name
         # Also index associated markets
         for assoc in market.get("associatedMarkets", []):
             if not isinstance(assoc, dict):
                 continue
-            aid = assoc.get("externalMarketId")
+            aid = assoc.get("marketId") or assoc.get("externalMarketId")
             aname = assoc.get("marketName") or assoc.get("name") or name
             if aid and aname:
                 market_names[str(aid)] = aname
@@ -316,18 +322,19 @@ def _extract_per_event_data(data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
             }
         bucket = per_event[event_id]
 
-        ext_id = str(market.get("externalMarketId") or market_id)
-        if ext_id:
-            bucket["market_ids"].add(ext_id)
+        # Use dict key (internal marketId) — getMarketPrices needs internal IDs
+        internal_id = str(market_id)
+        if internal_id:
+            bucket["market_ids"].add(internal_id)
 
         name = market.get("marketName") or market.get("name") or ""
-        if ext_id and name:
-            bucket["market_name_map"][ext_id] = name
+        if internal_id and name:
+            bucket["market_name_map"][internal_id] = name
 
         for assoc in market.get("associatedMarkets", []):
             if not isinstance(assoc, dict):
                 continue
-            aid = str(assoc.get("externalMarketId") or "")
+            aid = str(assoc.get("marketId") or assoc.get("externalMarketId") or "")
             if aid:
                 bucket["market_ids"].add(aid)
                 aname = assoc.get("marketName") or assoc.get("name") or name

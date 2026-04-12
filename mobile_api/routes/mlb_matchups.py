@@ -1734,6 +1734,13 @@ def mlb_matchup_detail(game_pk: int):
                 offense_team = away_team
 
         pitcher["offense_team"] = offense_team
+        # Attach pitcher-level pitch mix from the map
+        pid = pitcher.get("pitcher_id")
+        mix_rows = pitcher_pitch_mix_map.get(pid or -1, {"L": [], "R": []})
+        pitcher["pitch_mix"] = {
+            "vs_lhb": list(mix_rows.get("L", [])),
+            "vs_rhb": list(mix_rows.get("R", [])),
+        }
         pitcher["batters"] = sorted(
             pitcher.get("batters", []),
             key=lambda row: row.get("score") or 0,

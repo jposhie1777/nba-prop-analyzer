@@ -884,6 +884,57 @@ def _fetch_batter_vs_pitches_map(
             ],
         )
 
+    # Fetch advanced batted ball metrics from PropFinder hit_data (exact match)
+    adv_rows = _safe_query(
+        client,
+        f"""
+        WITH deduped AS (
+          SELECT DISTINCT
+            CAST(batter_id AS INT64) AS batter_id,
+            UPPER(CAST(pitch_hand AS STRING)) AS pitcher_hand,
+            CAST(pitch_type AS STRING) AS pitch_name,
+            CAST(launch_speed AS FLOAT64) AS launch_speed,
+            LOWER(CAST(trajectory AS STRING)) AS trajectory,
+            is_barrel
+          FROM {hit_data_table_qualified}
+          WHERE run_date = @run_date
+            AND CAST(batter_id AS INT64) IN UNNEST(@batter_ids)
+            AND UPPER(CAST(pitch_hand AS STRING)) IN ('L', 'R', 'LHP', 'RHP')
+            AND COALESCE(CAST(pitch_type AS STRING), '') != ''
+            AND CAST(season AS INT64) = @season
+        )
+        SELECT
+          batter_id,
+          CASE WHEN pitcher_hand IN ('LHP') THEN 'L' WHEN pitcher_hand IN ('RHP') THEN 'R' ELSE pitcher_hand END AS pitcher_hand,
+          pitch_name,
+          ROUND(AVG(launch_speed), 1) AS adv_ev,
+          ROUND(SUM(CASE WHEN is_barrel THEN 1 ELSE 0 END) / COUNT(*) * 100, 1) AS adv_barrel_pct,
+          ROUND(SUM(CASE WHEN launch_speed >= 95 THEN 1 ELSE 0 END) / COUNT(*) * 100, 1) AS adv_hh_pct,
+          ROUND(SUM(CASE WHEN trajectory = 'fly_ball' THEN 1 ELSE 0 END) / COUNT(*) * 100, 1) AS adv_fb_pct
+        FROM deduped
+        GROUP BY batter_id, pitcher_hand, pitch_name
+        """,
+        [
+            bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
+            bigquery.ArrayQueryParameter("batter_ids", "INT64", batter_ids),
+            bigquery.ScalarQueryParameter("season", "INT64", season),
+        ],
+    )
+
+    # Build lookup for advanced metrics
+    adv_map: Dict[tuple, Dict[str, Any]] = {}
+    for arow in adv_rows:
+        bid = _safe_int(arow.get("batter_id"))
+        hand = _normalize_hand(arow.get("pitcher_hand"))
+        pname = _clean_str(arow.get("pitch_name"))
+        if bid is not None and hand is not None and pname is not None:
+            adv_map[(bid, hand, pname.lower())] = {
+                "ev": _safe_float(arow.get("adv_ev")),
+                "barrel_pct": _safe_float(arow.get("adv_barrel_pct")),
+                "hh_pct": _safe_float(arow.get("adv_hh_pct")),
+                "fb_pct": _safe_float(arow.get("adv_fb_pct")),
+            }
+
     out: Dict[int, Dict[str, List[Dict[str, Any]]]] = {batter_id: {"L": [], "R": []} for batter_id in batter_ids}
     totals: Dict[tuple[int, str], int] = {}
 
@@ -897,6 +948,8 @@ def _fetch_batter_vs_pitches_map(
         totals[(batter_id, pitcher_hand)] = totals.get((batter_id, pitcher_hand), 0) + count
         out.setdefault(batter_id, {"L": [], "R": []}).setdefault(pitcher_hand, [])
         hits = _safe_int(row.get("hits")) or 0
+        # Use PropFinder hit_data for advanced metrics (exact match), Statcast for basic stats
+        adv = adv_map.get((batter_id, pitcher_hand, (pitch_name or "").lower()), {})
         out[batter_id][pitcher_hand].append(
             {
                 "pitch_name": pitch_name,
@@ -911,9 +964,10 @@ def _fetch_batter_vs_pitches_map(
                 "iso": _safe_float(row.get("iso")),
                 "hr": _safe_int(row.get("hr")) or 0,
                 "k_pct": _safe_float(row.get("k_pct")),
-                "ev": _safe_float(row.get("ev")),
-                "barrel_pct": _safe_float(row.get("barrel_pct")),
-                "hh_pct": _safe_float(row.get("hh_pct")),
+                "ev": adv.get("ev") or _safe_float(row.get("ev")),
+                "barrel_pct": adv.get("barrel_pct") if adv.get("barrel_pct") is not None else _safe_float(row.get("barrel_pct")),
+                "hh_pct": adv.get("hh_pct") if adv.get("hh_pct") is not None else _safe_float(row.get("hh_pct")),
+                "fb_pct": adv.get("fb_pct"),
             }
         )
 

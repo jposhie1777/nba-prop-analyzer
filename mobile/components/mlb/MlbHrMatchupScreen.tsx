@@ -158,13 +158,13 @@ function aggregateStatsForPitches(
       pa: null, hits: null, at_bats: null,
       hr: null,
       avg_ev: batter.season_ev ?? batter.l15_ev ?? null,
-      fb_pct: (batter as any).bvp_batted_ball?.profile?.fb_pct ?? null,
+      fb_pct: null,
     };
   }
 
   let totalPa = 0, totalHits = 0, totalAb = 0, totalHr = 0;
-  let sumBa = 0, sumObp = 0, sumIso = 0, sumSlg = 0, sumWoba = 0, sumKPct = 0, sumEv = 0, sumBarrel = 0, sumHh = 0;
-  let hasBa = false, hasObp = false, hasIso = false, hasSlg = false, hasWoba = false, hasK = false, hasEv = false, hasBarrel = false, hasHh = false;
+  let sumBa = 0, sumObp = 0, sumIso = 0, sumSlg = 0, sumWoba = 0, sumKPct = 0, sumEv = 0, sumBarrel = 0, sumHh = 0, sumFb = 0;
+  let hasBa = false, hasObp = false, hasIso = false, hasSlg = false, hasWoba = false, hasK = false, hasEv = false, hasBarrel = false, hasHh = false, hasFb = false;
 
   for (const row of filtered) {
     const count = row.pitch_count ?? row.count ?? 1;
@@ -181,6 +181,7 @@ function aggregateStatsForPitches(
     if (row.ev != null) { sumEv += row.ev * count; hasEv = true; }
     if (row.barrel_pct != null) { sumBarrel += row.barrel_pct * count; hasBarrel = true; }
     if (row.hh_pct != null) { sumHh += row.hh_pct * count; hasHh = true; }
+    if (row.fb_pct != null) { sumFb += row.fb_pct * count; hasFb = true; }
   }
 
   // Fallback K% from pitcher pitch mix if batter pitch rows don't have k_pct
@@ -211,7 +212,7 @@ function aggregateStatsForPitches(
     at_bats: totalAb > 0 ? totalAb : null,
     hr: totalHr > 0 ? totalHr : null,
     avg_ev: hasEv ? sumEv / w : (batter.season_ev ?? batter.l15_ev ?? null),
-    fb_pct: (batter as any).bvp_batted_ball?.profile?.fb_pct ?? null,
+    fb_pct: hasFb ? sumFb / w : ((batter as any).bvp_batted_ball?.profile?.fb_pct ?? null),
   };
 }
 

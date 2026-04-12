@@ -75,6 +75,7 @@ export type MlbBatterVsPitchRow = {
   ev?: number | null;
   barrel_pct?: number | null;
   hh_pct?: number | null;
+  fb_pct?: number | null;
 };
 
 export type MlbBatterPick = {

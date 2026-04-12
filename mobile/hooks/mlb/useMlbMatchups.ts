@@ -196,6 +196,7 @@ export type MlbGameWeather = {
 export type MlbMatchupDetail = {
   game_pk: number;
   run_date: string;
+  season?: number | null;
   game: {
     home_team?: string | null;
     away_team?: string | null;
@@ -259,10 +260,11 @@ export function useMlbUpcomingDebug() {
   return useEplQuery<MlbUpcomingDebug>("/mlb/matchups/upcoming/debug");
 }
 
-export function useMlbMatchupDetail(gamePk?: number | null) {
+export function useMlbMatchupDetail(gamePk?: number | null, season: number = 2026) {
+  const params = useMemo(() => ({ season }), [season]);
   return useEplQuery<MlbMatchupDetail>(
     `/mlb/matchups/${gamePk ?? 0}`,
-    undefined,
+    params,
     Boolean(gamePk)
   );
 }

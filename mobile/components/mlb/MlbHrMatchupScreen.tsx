@@ -601,7 +601,8 @@ export function HrMatchupGameContent({
   onToggleSelect: (batterId: string) => void;
 }) {
   const { colors } = useTheme();
-  const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
+  const [season, setSeason] = useState(2026);
+  const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null, season);
   const { data: boData } = useMlbBattingOrder(Number.isFinite(gamePk) ? gamePk : null);
 
   const weakSpotMap = useMemo(() => {
@@ -643,6 +644,22 @@ export function HrMatchupGameContent({
 
   return (
     <>
+      {/* Season toggle */}
+      <View style={s.seasonRow}>
+        <Pressable
+          style={[s.seasonBtn, season === 2025 ? s.seasonBtnActive : s.seasonBtnInactive]}
+          onPress={() => setSeason(2025)}
+        >
+          <Text style={season === 2025 ? s.seasonBtnTextActive : s.seasonBtnTextInactive}>2025</Text>
+        </Pressable>
+        <Pressable
+          style={[s.seasonBtn, season === 2026 ? s.seasonBtnActive : s.seasonBtnInactive]}
+          onPress={() => setSeason(2026)}
+        >
+          <Text style={season === 2026 ? s.seasonBtnTextActive : s.seasonBtnTextInactive}>2026</Text>
+        </Pressable>
+      </View>
+
       {data.pitchers.map((pitcher) => {
         const batters = dedupeBatters(pitcher.batters ?? []).slice(0, 12);
         const pitcherHandRaw = (pitcher.pitcher_hand ?? "R").toUpperCase();
@@ -713,7 +730,8 @@ export function MlbHrMatchupScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ gamePk?: string; awayTeam?: string; homeTeam?: string }>();
   const gamePk = Number(params.gamePk);
-  const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
+  const [season, setSeason] = useState(2026);
+  const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null, season);
   const { data: boData } = useMlbBattingOrder(Number.isFinite(gamePk) ? gamePk : null);
   const platform = getBuildPlatform();
 
@@ -1171,6 +1189,31 @@ const s = StyleSheet.create({
   },
   avgLabel: { color: "#94A3B8", fontSize: 11, fontWeight: "800" },
   avgCellText: { color: "#94A3B8", fontSize: 10, fontWeight: "800", textAlign: "center" },
+
+  // Season toggle
+  seasonRow: {
+    flexDirection: "row",
+    gap: 0,
+    marginBottom: 8,
+    alignSelf: "flex-end",
+  },
+  seasonBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1,
+  },
+  seasonBtnActive: {
+    backgroundColor: "rgba(99,102,241,0.25)",
+    borderColor: "#6366F1",
+    borderRadius: 4,
+  },
+  seasonBtnInactive: {
+    backgroundColor: "transparent",
+    borderColor: "#334155",
+    borderRadius: 4,
+  },
+  seasonBtnTextActive: { color: "#A5B4FC", fontSize: 12, fontWeight: "800" },
+  seasonBtnTextInactive: { color: "#64748B", fontSize: 12, fontWeight: "700" },
 
   // Pitcher Pitch Mix collapsible section
   mixSection: {

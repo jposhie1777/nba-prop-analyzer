@@ -663,6 +663,7 @@ def _fetch_pitcher_pitch_mix_map(
     run_date: str,
     game_pk: int,
     pitcher_ids: List[int],
+    season: int = 2026,
 ) -> Dict[int, Dict[str, List[Dict[str, Any]]]]:
     """
     Build pitcher pitch-mix rows keyed by pitcher_id and batter hand (L/R).
@@ -691,6 +692,7 @@ def _fetch_pitcher_pitch_mix_map(
           AND CAST(game_pk AS INT64) = @game_pk
           AND CAST(pitcher_id AS INT64) IN UNNEST(@pitcher_ids)
           AND COALESCE(CAST(pitch_name AS STRING), '') != ''
+          AND CAST(season AS INT64) = @season
         QUALIFY ROW_NUMBER() OVER (
           PARTITION BY pitcher_id, batter_hand, pitch_name
           ORDER BY ingested_at DESC NULLS LAST
@@ -700,6 +702,7 @@ def _fetch_pitcher_pitch_mix_map(
             bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
             bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
             bigquery.ArrayQueryParameter("pitcher_ids", "INT64", pitcher_ids),
+            bigquery.ScalarQueryParameter("season", "INT64", season),
         ],
     )
 
@@ -722,12 +725,14 @@ def _fetch_pitcher_pitch_mix_map(
           AND CAST(pitcher_id AS INT64) IN UNNEST(@pitcher_ids)
           AND UPPER(CAST(bat_side AS STRING)) IN ('L', 'R')
           AND COALESCE(CAST(pitch_type AS STRING), '') != ''
+          AND CAST(season AS INT64) = @season
         GROUP BY pitcher_id, batter_hand, pitch_name
         """,
         [
             bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
             bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
             bigquery.ArrayQueryParameter("pitcher_ids", "INT64", pitcher_ids),
+            bigquery.ScalarQueryParameter("season", "INT64", season),
         ],
     )
 
@@ -786,6 +791,7 @@ def _fetch_batter_vs_pitches_map(
     run_date: str,
     game_pk: int,
     batter_ids: List[int],
+    season: int = 2026,
 ) -> Dict[int, Dict[str, List[Dict[str, Any]]]]:
     """
     Build hitter-vs-pitch rows keyed by batter_id and pitcher hand (L/R).
@@ -844,12 +850,14 @@ def _fetch_batter_vs_pitches_map(
           AND CAST(batter_id AS INT64) IN UNNEST(@batter_ids)
           AND UPPER(CAST(pitch_hand AS STRING)) IN ('L', 'R', 'LHP', 'RHP')
           AND COALESCE(CAST(pitch_type AS STRING), '') != ''
+          AND CAST(season AS INT64) = @season
         GROUP BY batter_id, pitcher_hand, pitch_name
         """,
         [
             bigquery.ScalarQueryParameter("run_date", "DATE", run_date),
             bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
             bigquery.ArrayQueryParameter("batter_ids", "INT64", batter_ids),
+            bigquery.ScalarQueryParameter("season", "INT64", season),
         ],
     )
 
@@ -1364,8 +1372,8 @@ def _nrfi_route(state: str = "nj"):
 
 
 @router.get("/mlb/matchups/{game_pk}")
-def mlb_matchup_detail(game_pk: int):
-    cache_key = f"matchup:{game_pk}"
+def mlb_matchup_detail(game_pk: int, season: int = Query(default=2026, ge=2025, le=2026)):
+    cache_key = f"matchup:{game_pk}:s{season}"
     cached = _cache_get(cache_key)
     if cached is not None:
         return cached
@@ -1569,11 +1577,13 @@ def mlb_matchup_detail(game_pk: int):
             _fetch_pitcher_pitch_mix_map,
             client, pitch_log_table, hit_data_table,
             run_date, game_pk, pitcher_ids_for_pitch_tables,
+            season,
         )
         fut_bvp_pitches = pool.submit(
             _fetch_batter_vs_pitches_map,
             client, hit_data_table,
             run_date, game_pk, batter_ids_for_pitch_tables,
+            season,
         )
         fut_bvp_career = pool.submit(
             _fetch_bvp_career_map,
@@ -1776,6 +1786,7 @@ def mlb_matchup_detail(game_pk: int):
     result = {
         "game_pk": game_pk,
         "run_date": run_date,
+        "season": season,
         "game": {
             "home_team": home_team,
             "away_team": away_team,

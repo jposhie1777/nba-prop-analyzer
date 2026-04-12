@@ -923,7 +923,8 @@ async def fetch_pitcher_matchup(session, pitcher_id, opp_team_id, game_pk, pitch
 
     pitch_log_rows = []
     for pitch in data.get("pitchLog", []):
-        if si(pitch.get("season")) != CURRENT_SEASON:
+        pitch_season = si(pitch.get("season"))
+        if pitch_season is None or pitch_season < 2025:
             continue
 
         pitch_log_rows.append({
@@ -933,7 +934,7 @@ async def fetch_pitcher_matchup(session, pitcher_id, opp_team_id, game_pk, pitch
             "batter_hand":pitch.get("type", ""),
             "pitch_code": pitch.get("pitchCode", ""),
             "pitch_name": pitch.get("pitchName", ""),
-            "season":     CURRENT_SEASON,
+            "season":     pitch_season,
             "count":      si(pitch.get("count")),
             "percentage": sf(pitch.get("percentage")),
             "home_runs":  si(pitch.get("homeRuns")),

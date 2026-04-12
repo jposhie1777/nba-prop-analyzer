@@ -200,6 +200,7 @@ RAW_STATCAST_BATTER_PITCH_SCHEMA = [
     bigquery.SchemaField("bb_pct",            "FLOAT"),
     bigquery.SchemaField("avg_ev",            "FLOAT"),
     bigquery.SchemaField("barrel_pct",        "FLOAT"),
+    bigquery.SchemaField("hh_pct",            "FLOAT"),
     bigquery.SchemaField("ingested_at",       "TIMESTAMP"),
 ]
 
@@ -988,7 +989,9 @@ async def fetch_statcast_batter_pitch_stats(session, batter_id, batter_name, sea
             groups[key] = {
                 "pa_events": [],
                 "ev_values": [],
-                "barrel_flags": [],  # True/False for batted balls
+                "la_values": [],
+                "hard_hit_flags": [],
+                "barrel_flags": [],
             }
         g = groups[key]
 
@@ -996,15 +999,43 @@ async def fetch_statcast_batter_pitch_stats(session, batter_id, batter_name, sea
         if event:
             g["pa_events"].append(event)
 
-        # Only record EV for batted ball events (non-empty launch_speed)
+        # Only record EV/LA for batted ball events (non-empty launch_speed)
         ls_raw = (row.get("launch_speed") or "").strip()
+        la_raw = (row.get("launch_angle") or "").strip()
         if ls_raw:
             ls = sf(ls_raw)
+            la = sf(la_raw) if la_raw else None
             if ls is not None and ls > 0:
                 g["ev_values"].append(ls)
-                # launch_speed_angle == 6 means barrel in Statcast
-                lsa = (row.get("launch_speed_angle") or "").strip()
-                g["barrel_flags"].append(lsa == "6")
+                g["la_values"].append(la)
+                # Hard hit: EV >= 95 mph
+                g["hard_hit_flags"].append(ls >= 95.0)
+                # Barrel: use MLB definition — EV >= 98 + LA sweet spot
+                is_barrel = False
+                if ls >= 98.0 and la is not None:
+                    if ls >= 98.0 and 26.0 <= la <= 30.0:
+                        is_barrel = True
+                    elif ls >= 99.0 and 25.0 <= la <= 31.0:
+                        is_barrel = True
+                    elif ls >= 100.0 and 24.0 <= la <= 33.0:
+                        is_barrel = True
+                    elif ls >= 101.0 and 23.0 <= la <= 35.0:
+                        is_barrel = True
+                    elif ls >= 102.0 and 22.0 <= la <= 37.0:
+                        is_barrel = True
+                    elif ls >= 103.0 and 21.0 <= la <= 39.0:
+                        is_barrel = True
+                    elif ls >= 104.0 and 20.0 <= la <= 41.0:
+                        is_barrel = True
+                    elif ls >= 105.0 and 19.0 <= la <= 43.0:
+                        is_barrel = True
+                    elif ls >= 106.0 and 18.0 <= la <= 45.0:
+                        is_barrel = True
+                    elif ls >= 107.0 and 17.0 <= la <= 47.0:
+                        is_barrel = True
+                    elif ls >= 108.0 and 16.0 <= la <= 50.0:
+                        is_barrel = True
+                g["barrel_flags"].append(is_barrel)
 
     # Build output rows
     out = []
@@ -1039,10 +1070,12 @@ async def fetch_statcast_batter_pitch_stats(session, batter_id, batter_name, sea
         woba = round(woba_num / obp_denom, 3) if obp_denom > 0 else None
 
         ev_vals = g["ev_values"]
-        avg_ev = round(sum(ev_vals) / len(ev_vals), 1) if ev_vals else None
-        barrels = sum(1 for b in g["barrel_flags"] if b)
         batted_balls = len(ev_vals)
+        avg_ev = round(sum(ev_vals) / batted_balls, 1) if batted_balls > 0 else None
+        barrels = sum(1 for b in g["barrel_flags"] if b)
         barrel_pct = round((barrels / batted_balls) * 100, 1) if batted_balls > 0 else None
+        hard_hits = sum(1 for h in g["hard_hit_flags"] if h)
+        hh_pct = round((hard_hits / batted_balls) * 100, 1) if batted_balls > 0 else None
 
         out.append({
             "run_date":    TODAY.isoformat(),
@@ -1070,6 +1103,7 @@ async def fetch_statcast_batter_pitch_stats(session, batter_id, batter_name, sea
             "bb_pct":      bb_pct,
             "avg_ev":      avg_ev,
             "barrel_pct":  barrel_pct,
+            "hh_pct":      hh_pct,
             "ingested_at": NOW.isoformat(),
         })
 

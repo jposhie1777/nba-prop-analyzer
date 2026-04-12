@@ -827,7 +827,8 @@ def _fetch_batter_vs_pitches_map(
           k_pct,
           bb_pct,
           avg_ev AS ev,
-          barrel_pct
+          barrel_pct,
+          hh_pct
         FROM {statcast_table_qualified}
         WHERE CAST(batter_id AS INT64) IN UNNEST(@batter_ids)
           AND game_year = @season
@@ -912,6 +913,7 @@ def _fetch_batter_vs_pitches_map(
                 "k_pct": _safe_float(row.get("k_pct")),
                 "ev": _safe_float(row.get("ev")),
                 "barrel_pct": _safe_float(row.get("barrel_pct")),
+                "hh_pct": _safe_float(row.get("hh_pct")),
             }
         )
 

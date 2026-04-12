@@ -163,8 +163,8 @@ function aggregateStatsForPitches(
   }
 
   let totalPa = 0, totalHits = 0, totalAb = 0, totalHr = 0;
-  let sumBa = 0, sumObp = 0, sumIso = 0, sumSlg = 0, sumWoba = 0, sumKPct = 0, sumEv = 0, sumBarrel = 0;
-  let hasBa = false, hasObp = false, hasIso = false, hasSlg = false, hasWoba = false, hasK = false, hasEv = false, hasBarrel = false;
+  let sumBa = 0, sumObp = 0, sumIso = 0, sumSlg = 0, sumWoba = 0, sumKPct = 0, sumEv = 0, sumBarrel = 0, sumHh = 0;
+  let hasBa = false, hasObp = false, hasIso = false, hasSlg = false, hasWoba = false, hasK = false, hasEv = false, hasBarrel = false, hasHh = false;
 
   for (const row of filtered) {
     const count = row.pitch_count ?? row.count ?? 1;
@@ -180,6 +180,7 @@ function aggregateStatsForPitches(
     if (row.k_pct != null) { sumKPct += row.k_pct * count; hasK = true; }
     if (row.ev != null) { sumEv += row.ev * count; hasEv = true; }
     if (row.barrel_pct != null) { sumBarrel += row.barrel_pct * count; hasBarrel = true; }
+    if (row.hh_pct != null) { sumHh += row.hh_pct * count; hasHh = true; }
   }
 
   // Fallback K% from pitcher pitch mix if batter pitch rows don't have k_pct
@@ -201,7 +202,7 @@ function aggregateStatsForPitches(
     obp: hasObp ? sumObp / w : null,
     iso: hasIso ? sumIso / w : (batter.iso ?? null),
     barrel_pct_l15: hasBarrel ? sumBarrel / w : (batter.l15_barrel_pct ?? null),
-    hh_pct: batter.l15_hard_hit_pct ?? null,
+    hh_pct: hasHh ? sumHh / w : (batter.l15_hard_hit_pct ?? null),
     slg: slgVal,
     woba: hasWoba ? sumWoba / w : null,
     k_pct: hasK ? sumKPct / w : null,

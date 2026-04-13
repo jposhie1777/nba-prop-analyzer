@@ -7,11 +7,13 @@ SERVICE="pulse-discord-bot"
 IMAGE="gcr.io/$PROJECT/$SERVICE"
 
 echo "Building bot image..."
+# Cloud Build needs a Dockerfile in the source dir
+cp propfinder/Dockerfile.bot propfinder/Dockerfile
 gcloud builds submit \
   --project "$PROJECT" \
   --tag "$IMAGE" \
-  --dockerfile propfinder/Dockerfile.bot \
-  .
+  propfinder/
+rm -f propfinder/Dockerfile
 
 echo "Deploying to Cloud Run..."
 gcloud run deploy "$SERVICE" \

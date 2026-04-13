@@ -8,6 +8,7 @@ parlay cart, then use /parlay to generate a combined deeplink.
 import asyncio
 import logging
 import os
+from aiohttp import web
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from urllib.parse import quote
@@ -420,8 +421,23 @@ async def _alert_loop():
 
 # ── Entrypoint ─────────────────────────────────────────────────────────────
 
+async def _health_server():
+    """Simple HTTP server for Cloud Run health checks."""
+    async def health(request):
+        return web.Response(text="OK")
+    app = web.Application()
+    app.router.add_get("/", health)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.getenv("PORT", "8080"))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    log.info(f"Health server listening on port {port}")
+
+
 async def main():
     async with bot:
+        await _health_server()
         bot.loop.create_task(_alert_loop())
         await bot.start(TOKEN)
 

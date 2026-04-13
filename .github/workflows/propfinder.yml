@@ -49,6 +49,8 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY || secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
 
       - name: Run PropFinder workflow
+        env:
+          DISCORD_HR_WEBHOOK: ${{ secrets.DISCORD_HR_WEBHOOK }}
         run: |
           python propfinder/run_workflow.py 2>&1 | tee propfinder/workflow.log
 

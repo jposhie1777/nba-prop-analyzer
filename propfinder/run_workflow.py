@@ -85,6 +85,8 @@ def _steps(args: argparse.Namespace) -> Iterable[Tuple[str, str]]:
         yield "ingest", "ingest.py"
     if not args.skip_model:
         yield "model", "model.py"
+    if not args.skip_alerts:
+        yield "discord_alerts", "discord_alerts.py"
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
@@ -103,6 +105,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         "--skip-model",
         action="store_true",
         help="Skip model.py.",
+    )
+    parser.add_argument(
+        "--skip-alerts",
+        action="store_true",
+        help="Skip discord_alerts.py.",
     )
     parser.add_argument(
         "--lock-file",

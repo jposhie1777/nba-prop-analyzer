@@ -74,6 +74,10 @@ def fetch_top_picks():
     FROM `{HR_TABLE}`
     WHERE run_date = @run_date
       AND grade IN ('IDEAL', 'FAVORABLE')
+    QUALIFY ROW_NUMBER() OVER (
+      PARTITION BY batter_name, pitcher_name
+      ORDER BY score DESC
+    ) = 1
     ORDER BY score DESC
     """
     params = [bigquery.ScalarQueryParameter("run_date", "DATE", TODAY.isoformat())]

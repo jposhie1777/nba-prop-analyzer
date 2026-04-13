@@ -386,22 +386,44 @@ async def send_alerts():
     log.info(f"Sent {len(pick_store)} pick alerts to #{channel.name}")
 
 
+# ── Auto-check for new data ────────────────────────────────────────────────
+
+_last_sent_date = None
+
+async def _alert_loop():
+    """Check for new picks every 30 min. Send alerts when new data appears."""
+    global _last_sent_date
+    await bot.wait_until_ready()
+    await asyncio.sleep(5)
+
+    while not bot.is_closed():
+        try:
+            today = datetime.now(ET).date()
+            if _last_sent_date != today:
+                # Check if there are picks for today
+                client = bigquery.Client(project=PROJECT)
+                result = list(client.query(
+                    f"SELECT COUNT(*) as cnt FROM `{HR_TABLE}` WHERE run_date = '{today.isoformat()}' AND grade IN ('IDEAL','FAVORABLE')"
+                ).result())
+                count = result[0].cnt if result else 0
+                if count > 0:
+                    log.info(f"New picks found for {today} ({count} picks). Sending alerts...")
+                    await send_alerts()
+                    _last_sent_date = today
+                else:
+                    log.info(f"No picks yet for {today}. Checking again in 30 min.")
+        except Exception as e:
+            log.error(f"Alert loop error: {e}")
+
+        await asyncio.sleep(1800)  # 30 minutes
+
+
 # ── Entrypoint ─────────────────────────────────────────────────────────────
 
 async def main():
     async with bot:
-        # If --send-alerts flag, send alerts then keep running for interactions
-        if os.getenv("SEND_ALERTS") == "1":
-            bot.loop.create_task(_send_alerts_after_ready())
+        bot.loop.create_task(_alert_loop())
         await bot.start(TOKEN)
-
-async def _send_alerts_after_ready():
-    await bot.wait_until_ready()
-    await asyncio.sleep(2)
-    try:
-        await send_alerts()
-    except Exception as e:
-        log.error(f"Failed to send alerts: {e}")
 
 
 if __name__ == "__main__":

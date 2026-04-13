@@ -180,6 +180,15 @@ client.create_table(bigquery.Table(
         bigquery.SchemaField("dk_event_id",          "STRING"),
         bigquery.SchemaField("fd_market_id",         "STRING"),
         bigquery.SchemaField("fd_selection_id",      "STRING"),
+        # Weather conditions
+        bigquery.SchemaField("conditions",           "STRING"),   # e.g. "Clear", "Partly Cloudy", "Rain"
+        # Batter vs Pitcher career stats
+        bigquery.SchemaField("bvp_ab",               "INTEGER"),
+        bigquery.SchemaField("bvp_hits",             "INTEGER"),
+        bigquery.SchemaField("bvp_hr",               "INTEGER"),
+        # Team abbreviations per player
+        bigquery.SchemaField("batter_team",          "STRING"),
+        bigquery.SchemaField("pitcher_team",         "STRING"),
     ]
 ), exists_ok=True)
 print("Created hr_picks_daily")
@@ -239,5 +248,77 @@ if fields_to_add:
     print(f"Added {len(fields_to_add)} new columns to hr_picks_daily: {[f.name for f in fields_to_add]}")
 else:
     print("hr_picks_daily already has all weather/odds columns")
+
+# ── k_picks_daily ─────────────────────────────────────────────────────────
+client.create_table(bigquery.Table(
+    f"{PROJECT}.{DATASET}.k_picks_daily",
+    schema=[
+        bigquery.SchemaField("run_date",             "DATE"),
+        bigquery.SchemaField("run_timestamp",        "TIMESTAMP"),
+        bigquery.SchemaField("game_pk",              "INTEGER"),
+        bigquery.SchemaField("pitcher_id",           "INTEGER"),
+        bigquery.SchemaField("pitcher_name",         "STRING"),
+        bigquery.SchemaField("pitcher_hand",         "STRING"),
+        bigquery.SchemaField("team_code",            "STRING"),
+        bigquery.SchemaField("opp_team_code",        "STRING"),
+        # K prop line
+        bigquery.SchemaField("line",                 "FLOAT"),
+        bigquery.SchemaField("side",                 "STRING"),     # OVER or UNDER
+        bigquery.SchemaField("best_price",           "INTEGER"),
+        bigquery.SchemaField("best_book",            "STRING"),
+        bigquery.SchemaField("deep_link_desktop",    "STRING"),
+        bigquery.SchemaField("deep_link_ios",        "STRING"),
+        # Pitcher K metrics
+        bigquery.SchemaField("k_per_9",              "FLOAT"),
+        bigquery.SchemaField("k_pct",                "FLOAT"),
+        bigquery.SchemaField("season_k_per_9",       "FLOAT"),
+        bigquery.SchemaField("ip",                   "FLOAT"),
+        bigquery.SchemaField("batters_faced",        "INTEGER"),
+        bigquery.SchemaField("strike_pct",           "FLOAT"),
+        # Pitch arsenal K power
+        bigquery.SchemaField("arsenal_whiff_avg",    "FLOAT"),
+        bigquery.SchemaField("arsenal_k_pct_avg",    "FLOAT"),
+        bigquery.SchemaField("num_high_whiff_pitches","INTEGER"),
+        # PropFinder signals
+        bigquery.SchemaField("pf_rating",            "FLOAT"),
+        bigquery.SchemaField("avg_l10",              "FLOAT"),
+        bigquery.SchemaField("avg_home_away",        "FLOAT"),
+        bigquery.SchemaField("avg_vs_opponent",      "FLOAT"),
+        bigquery.SchemaField("hit_rate_l10",         "STRING"),
+        bigquery.SchemaField("hit_rate_season",      "STRING"),
+        bigquery.SchemaField("hit_rate_vs_team",     "STRING"),
+        bigquery.SchemaField("streak",               "INTEGER"),
+        # Team vulnerability
+        bigquery.SchemaField("opp_team_k_rank",      "INTEGER"),
+        bigquery.SchemaField("opp_team_k_total",     "INTEGER"),
+        # Game context
+        bigquery.SchemaField("game_total",           "FLOAT"),
+        bigquery.SchemaField("ballpark_name",        "STRING"),
+        # Score + grade
+        bigquery.SchemaField("score",                "FLOAT"),
+        bigquery.SchemaField("grade",                "STRING"),
+        bigquery.SchemaField("why",                  "STRING"),
+        bigquery.SchemaField("flags",                "STRING"),
+        # Actual result (filled by analytics after game)
+        bigquery.SchemaField("actual_k",             "INTEGER"),
+        bigquery.SchemaField("hit",                  "BOOLEAN"),
+    ]
+), exists_ok=True)
+print("Created k_picks_daily")
+
+# ── k_model_weights ──────────────────────────────────────────────────────
+client.create_table(bigquery.Table(
+    f"{PROJECT}.{DATASET}.k_model_weights",
+    schema=[
+        bigquery.SchemaField("run_date",      "DATE"),
+        bigquery.SchemaField("factor",        "STRING"),
+        bigquery.SchemaField("weight",        "FLOAT"),
+        bigquery.SchemaField("sample_size",   "INTEGER"),
+        bigquery.SchemaField("correlation",   "FLOAT"),
+        bigquery.SchemaField("hit_rate_pct",  "FLOAT"),
+        bigquery.SchemaField("updated_at",    "TIMESTAMP"),
+    ]
+), exists_ok=True)
+print("Created k_model_weights")
 
 print("\nAll tables created successfully.")

@@ -71,6 +71,16 @@ PULSE_FAV = 52
 PULSE_AVG = 33
 RAW_MAX = 125.0
 
+# MLB team ID → abbreviation
+TEAM_ABBREV = {
+    108: "LAA", 109: "ARI", 110: "BAL", 111: "BOS", 112: "CHC",
+    113: "CIN", 114: "CLE", 115: "COL", 116: "DET", 117: "HOU",
+    118: "KC",  119: "LAD", 120: "WSH", 121: "NYM", 133: "OAK",
+    134: "PIT", 135: "SD",  136: "SEA", 137: "SF",  138: "STL",
+    139: "TB",  140: "TEX", 141: "TOR", 142: "MIN", 143: "PHI",
+    144: "ATL", 145: "CWS", 146: "MIA", 147: "NYY", 158: "MIL",
+}
+
 
 def query(sql):
     return [dict(row) for row in bq.query(sql).result()]
@@ -251,6 +261,7 @@ def load_hr_prop_context():
             "ballpark_name": _pick(existing.get("ballpark_name"), row.get("ballparkName"), row.get("stadium"), row.get("venueName")),
             "roof_type": _pick(existing.get("roof_type"), row.get("roofType"), row.get("roof_type")),
             "weather_note": _pick(existing.get("weather_note"), row.get("weatherNote"), row.get("weather_note")),
+            "conditions": _pick(existing.get("conditions"), row.get("conditions"), row.get("weatherConditions")),
             "home_moneyline": _pick(existing.get("home_moneyline"), safe_int(row.get("homeMoneyline"), default=None), safe_int(row.get("home_moneyline"), default=None)),
             "away_moneyline": _pick(existing.get("away_moneyline"), safe_int(row.get("awayMoneyline"), default=None), safe_int(row.get("away_moneyline"), default=None)),
             "over_under": _pick(existing.get("over_under"), safe_float(row.get("gameTotal"), default=None), safe_float(row.get("over_under"), default=None)),
@@ -349,6 +360,8 @@ def load_game_weather():
             f"""
             SELECT
                 game_pk,
+                home_team_id,
+                away_team_id,
                 weather_indicator,
                 game_temp,
                 wind_speed,
@@ -399,6 +412,114 @@ def load_hr_props():
     except Exception as exc:
         log.warning("load_hr_props failed (table may not exist yet): %s", exc)
         return {}
+
+
+def load_batting_positions():
+    """Fetch batting order positions from PropFinder upcoming-games."""
+    url = f"{BASE_URL}/mlb/upcoming-games?date={TODAY.isoformat()}"
+    request = Request(url, headers={"User-Agent": "PulseSports/1.0", "Accept": "application/json"})
+    positions = {}  # (game_pk, batter_id) → 1-9
+    try:
+        with urlopen(request, timeout=20) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        for item in (data if isinstance(data, list) else []):
+            game_pk = safe_int(item.get("id"))
+            if not game_pk:
+                continue
+            for side in ("homeBattingOrder", "visitorBattingOrder"):
+                order_str = item.get(side, "")
+                ids = [safe_int(x) for x in str(order_str).split(",") if x.strip().isdigit()]
+                for pos_idx, bid in enumerate(ids):
+                    if bid:
+                        positions[(game_pk, bid)] = pos_idx + 1
+        log.info("Loaded batting positions for %s batter-game combos", len(positions))
+    except Exception as exc:
+        log.warning("Failed to load batting positions: %s", exc)
+    return positions
+
+
+def load_pitcher_vs_batting_order():
+    """Load pitcher stats vs each batting order position for today's pitchers."""
+    try:
+        rows = query(
+            f"""
+            SELECT pitcher_id, batting_order, at_bats, hits, home_runs, avg, slg, ops
+            FROM {tbl('raw_pitcher_vs_batting_order')}
+            WHERE run_date = '{TODAY}'
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY pitcher_id, batting_order ORDER BY ingested_at DESC
+            ) = 1
+            """
+        )
+        # (pitcher_id, batting_order) → row
+        return {(row["pitcher_id"], row["batting_order"]): row for row in rows}
+    except Exception as exc:
+        log.warning("load_pitcher_vs_batting_order failed: %s", exc)
+        return {}
+
+
+# Weak spot: pitcher is vulnerable at this batter's specific lineup position
+# SLG >= 0.450 or 2+ HR (with >= 5 AB sample)
+def check_weak_spot(pitcher_id, batting_pos, pvbo_map):
+    """Return weak spot stats dict if pitcher is vulnerable at this lineup position."""
+    if not batting_pos:
+        return None
+    row = pvbo_map.get((pitcher_id, batting_pos))
+    if not row or (row.get("at_bats") or 0) < 5:
+        return None
+    slg = row.get("slg") or 0
+    hr = row.get("home_runs") or 0
+    if slg >= 0.450 or hr >= 2:
+        return {
+            "ws_batting_order": batting_pos,
+            "ws_at_bats": row.get("at_bats"),
+            "ws_hits": row.get("hits"),
+            "ws_home_runs": hr,
+            "ws_slg": slg,
+        }
+    return None
+
+
+def fetch_bvp_stats(batter_id, pitcher_id):
+    """Fetch career batter-vs-pitcher stats from MLB Stats API."""
+    try:
+        url = (
+            f"https://statsapi.mlb.com/api/v1/people/{batter_id}/stats"
+            f"?stats=vsPlayer&opposingPlayerId={pitcher_id}&group=hitting"
+        )
+        req = Request(url, headers={"User-Agent": "PropFinder/1.0"})
+        import json as _json
+        with urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read().decode("utf-8"))
+        for stat_group in data.get("stats", []):
+            for split in stat_group.get("splits", []):
+                s = split.get("stat", {})
+                ab = safe_int(s.get("atBats"))
+                hits = safe_int(s.get("hits"))
+                hr = safe_int(s.get("homeRuns"))
+                if ab > 0:
+                    return {"bvp_ab": ab, "bvp_hits": hits, "bvp_hr": hr}
+    except Exception as exc:
+        log.debug("BvP fetch failed for %s vs %s: %s", batter_id, pitcher_id, exc)
+    return {"bvp_ab": None, "bvp_hits": None, "bvp_hr": None}
+
+
+def load_bvp_bulk(matchups):
+    """Fetch BvP stats for all matchups, with rate limiting."""
+    import time as _time
+    bvp_map = {}
+    seen = set()
+    for m in matchups:
+        key = (m["batter_id"], m["pitcher_id"])
+        if key in seen:
+            continue
+        seen.add(key)
+    log.info("Fetching BvP stats for %s unique matchups", len(seen))
+    for i, (batter_id, pitcher_id) in enumerate(seen):
+        bvp_map[(batter_id, pitcher_id)] = fetch_bvp_stats(batter_id, pitcher_id)
+        if (i + 1) % 20 == 0:
+            _time.sleep(0.5)  # rate limit
+    return bvp_map
 
 
 def load_today_matchups():
@@ -740,6 +861,9 @@ def main():
     hr_prop_context = load_hr_prop_context()
     log.info("Loaded HR prop context for %s batter/game rows", len(hr_prop_context))
     log.info("Loaded game weather rows: %s | raw HR props rows: %s", len(weather_map), len(props_map))
+    bvp_map = load_bvp_bulk(matchups)
+    batting_pos_map = load_batting_positions()
+    pvbo_map = load_pitcher_vs_batting_order()
 
     if not matchups:
         log.warning("No matchup data - did ingest run with the updated ingest.py?")
@@ -794,13 +918,26 @@ def main():
 
         gw = weather_map.get(matchup["game_pk"], {})
         pr = props_map.get((matchup["game_pk"], matchup["batter_id"]), {})
+
+        # Resolve team abbreviations from batter_team_id
+        batter_team_id = matchup.get("batter_team_id")
+        home_tid = gw.get("home_team_id")
+        away_tid = gw.get("away_team_id")
+        batter_team_abbr = TEAM_ABBREV.get(batter_team_id, "")
+        if batter_team_id == home_tid:
+            pitcher_team_abbr = TEAM_ABBREV.get(away_tid, "")
+        elif batter_team_id == away_tid:
+            pitcher_team_abbr = TEAM_ABBREV.get(home_tid, "")
+        else:
+            pitcher_team_abbr = ""
+
         output_rows.append(
             {
                 "run_date": TODAY.isoformat(),
                 "run_timestamp": NOW.isoformat(),
                 "game_pk": matchup["game_pk"],
-                "home_team": prop_ctx.get("home_team") or gw.get("home_team_name") or "",
-                "away_team": prop_ctx.get("away_team") or gw.get("away_team_name") or "",
+                "home_team": TEAM_ABBREV.get(home_tid, "") or prop_ctx.get("home_team") or "",
+                "away_team": TEAM_ABBREV.get(away_tid, "") or prop_ctx.get("away_team") or "",
                 "batter_id": matchup["batter_id"],
                 "batter_name": matchup["batter_name"],
                 "bat_side": matchup["bat_side"],
@@ -832,6 +969,16 @@ def main():
                 "dk_event_id": prop_ctx.get("dk_event_id") or pr.get("dk_event_id"),
                 "fd_market_id": prop_ctx.get("fd_market_id") or pr.get("fd_market_id"),
                 "fd_selection_id": prop_ctx.get("fd_selection_id") or pr.get("fd_selection_id"),
+                "conditions": prop_ctx.get("conditions") or gw.get("conditions") or "",
+                **bvp_map.get((matchup["batter_id"], matchup["pitcher_id"]), {"bvp_ab": None, "bvp_hits": None, "bvp_hr": None}),
+                "batter_team": batter_team_abbr,
+                "pitcher_team": pitcher_team_abbr,
+                "batting_order_pos": batting_pos_map.get((matchup["game_pk"], matchup["batter_id"])),
+                **(check_weak_spot(
+                    matchup["pitcher_id"],
+                    batting_pos_map.get((matchup["game_pk"], matchup["batter_id"])),
+                    pvbo_map,
+                ) or {"ws_batting_order": None, "ws_at_bats": None, "ws_hits": None, "ws_home_runs": None, "ws_slg": None}),
             }
         )
 

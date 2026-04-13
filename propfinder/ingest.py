@@ -696,7 +696,8 @@ async def fetch_k_props(session, game_pk):
             continue
         if item.get("isAlternate") is not None:
             continue
-        if item.get("overUnder") != "over":
+        ou_side = (item.get("overUnder") or "").lower()
+        if ou_side not in ("over", "under"):
             continue
 
         best = item.get("bestMarket") or {}
@@ -708,7 +709,7 @@ async def fetch_k_props(session, game_pk):
             "team_code":         item.get("teamCode", ""),
             "opp_team_code":     item.get("opposingTeamCode", ""),
             "line":              sf(item.get("line")),
-            "over_under":        "over",
+            "over_under":        ou_side,
             "best_price":        si(best.get("price")),
             "best_book":         best.get("sportsbook", ""),
             "pf_rating":         sf(item.get("pfRating")),

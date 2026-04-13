@@ -39,6 +39,87 @@ GRADE_COLORS = {"IDEAL": 0x22C55E, "FAVORABLE": 0xF59E0B}
 GRADE_EMOJI = {"IDEAL": "\U0001f7e2", "FAVORABLE": "\U0001f7e1"}
 WEAK_SPOT_COLOR = 0xEF4444
 
+COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+           "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+
+
+def _wind_str(speed, direction):
+    if not speed or int(speed) == 0:
+        return ""
+    spd = int(speed)
+    if direction is not None:
+        idx = round(int(direction) / 22.5) % 16
+        return f"{spd} mph {COMPASS[idx]}"
+    return f"{spd} mph"
+
+
+def _weather_circle(indicator, precip_prob):
+    ind = (indicator or "").lower()
+    if ind == "red" or (precip_prob and precip_prob >= 50):
+        return "\U0001f534"
+    if ind == "yellow" or (precip_prob and precip_prob >= 25):
+        return "\U0001f7e1"
+    return "\U0001f7e2"
+
+
+def _conditions_label(conditions, precip_prob):
+    c = (conditions or "").strip()
+    if c:
+        return c
+    if precip_prob and precip_prob >= 50:
+        return "Rain likely"
+    if precip_prob and precip_prob >= 25:
+        return "Chance of rain"
+    return "Clear"
+
+
+def _venue_weather_short(p):
+    parts = []
+    park = p.get("ballpark_name") or ""
+    roof = (p.get("roof_type") or "").lower()
+    if park:
+        parts.append(park)
+    wind = _wind_str(p.get("wind_speed"), p.get("wind_dir"))
+    if wind and "retractable" not in roof and "dome" not in roof:
+        parts.append(wind)
+    elif "dome" in roof or "retractable" in roof:
+        parts.append("Dome")
+    forecast = _conditions_label(p.get("conditions"), p.get("precip_prob"))
+    circle = _weather_circle(p.get("weather_indicator"), p.get("precip_prob"))
+    parts.append(f"{circle} {forecast}")
+    return " | ".join(parts)
+
+
+def _stats_line(p):
+    parts = []
+    iso = p.get("iso")
+    if iso is not None:
+        parts.append(f"ISO {iso:.3f}")
+    barrel = p.get("l15_barrel_pct")
+    if barrel is not None:
+        parts.append(f"Barrel {barrel:.0f}%")
+    ev = p.get("l15_ev")
+    if ev is not None:
+        parts.append(f"EV {ev:.1f}")
+    hh = p.get("l15_hard_hit_pct")
+    if hh is not None:
+        parts.append(f"HH {hh:.0f}%")
+    hrfb = p.get("hr_fb_pct")
+    if hrfb is not None:
+        parts.append(f"HR/FB {hrfb:.0f}%")
+    bvp_ab = p.get("bvp_ab")
+    bvp_hits = p.get("bvp_hits")
+    bvp_hr = p.get("bvp_hr")
+    if bvp_ab and bvp_ab > 0:
+        bvp_str = f"BvP {bvp_hits}-{bvp_ab}"
+        if bvp_hr and bvp_hr > 0:
+            bvp_str += f", {bvp_hr} HR"
+        parts.append(bvp_str)
+    phr9 = p.get("p_hr9_vs_hand")
+    if phr9 is not None:
+        parts.append(f"P-HR/9 {phr9:.2f}")
+    return " | ".join(parts)
+
 # ── State ───────────────────────────────────────────────────────────────────
 # pick_id -> pick data (populated when alerts are sent)
 pick_store: dict[str, dict] = {}
@@ -184,8 +265,6 @@ tree = app_commands.CommandTree(bot)
 @bot.event
 async def on_ready():
     log.info(f"Bot ready: {bot.user}")
-    # Re-register persistent views for old messages
-    bot.add_view(PickView("__persistent__"))
     try:
         guild = discord.Object(id=GUILD_ID)
         tree.copy_global_to(guild=guild)
@@ -193,6 +272,47 @@ async def on_ready():
         log.info("Slash commands synced")
     except Exception as e:
         log.error(f"Failed to sync commands: {e}")
+
+
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    """Handle DK/FD button clicks from ANY message (bot-sent or discord_alerts.py-sent)."""
+    if interaction.type != discord.InteractionType.component:
+        return
+    custom_id = interaction.data.get("custom_id", "")
+    if not (custom_id.startswith("dk:") or custom_id.startswith("fd:")):
+        return
+
+    book, pick_id = custom_id.split(":", 1)
+    uid = interaction.user.id
+    book_label = "DraftKings" if book == "dk" else "FanDuel"
+
+    # Try pick_store first; if not there, build minimal pick from the embed
+    pick = pick_store.get(pick_id)
+    if not pick:
+        # Extract batter name from pick_id (format: "Name_gamepk")
+        batter_name = pick_id.rsplit("_", 1)[0] if "_" in pick_id else pick_id
+        pick = {"batter_name": batter_name, "game_pk": pick_id.rsplit("_", 1)[-1] if "_" in pick_id else ""}
+        pick_store[pick_id] = pick
+
+    cart = user_carts.setdefault(uid, {"dk": {}, "fd": {}})
+    book_cart = cart[book]
+    batter = pick.get("batter_name", "?")
+
+    if pick_id in book_cart:
+        del book_cart[pick_id]
+        count = len(book_cart)
+        await interaction.response.send_message(
+            f"\u274c Removed **{batter}** from {book_label} parlay ({count} leg{'s' if count != 1 else ''})",
+            ephemeral=True,
+        )
+    else:
+        book_cart[pick_id] = pick
+        count = len(book_cart)
+        await interaction.response.send_message(
+            f"\u2705 Added **{batter}** to {book_label} parlay ({count} leg{'s' if count != 1 else ''})",
+            ephemeral=True,
+        )
 
 
 @tree.command(name="parlay", description="Generate your parlay deeplink from selected picks")
@@ -256,19 +376,23 @@ async def send_alerts():
     query = f"""
     SELECT
       batter_name, bat_side, pitcher_name, pitcher_hand,
+      home_team, away_team, batter_team, pitcher_team,
       score, grade, why, flags,
-      iso, slg, l15_ev, l15_barrel_pct,
+      iso, slg, l15_ev, l15_barrel_pct, l15_hard_hit_pct, hr_fb_pct,
       p_hr9_vs_hand, p_hr_fb_pct, p_barrel_pct,
       hr_odds_best_price, hr_odds_best_book,
       dk_outcome_code, dk_event_id, fd_market_id, fd_selection_id,
-      weather_indicator, game_temp, ballpark_name,
+      weather_indicator, game_temp, wind_speed, wind_dir, precip_prob,
+      conditions, ballpark_name, roof_type,
+      bvp_ab, bvp_hits, bvp_hr,
+      batting_order_pos, ws_batting_order, ws_at_bats, ws_hits, ws_home_runs, ws_slg,
       game_pk
     FROM `{HR_TABLE}`
     WHERE run_date = @run_date
       AND grade IN ('IDEAL', 'FAVORABLE')
     QUALIFY ROW_NUMBER() OVER (
       PARTITION BY batter_name, pitcher_name
-      ORDER BY score DESC
+      ORDER BY run_timestamp DESC
     ) = 1
     ORDER BY score DESC
     """
@@ -293,96 +417,49 @@ async def send_alerts():
         f"Tap <:dk:1493069919766708295> or <:fd:1493070566809403593> to build your parlay, then `/parlay` to get your deeplink."
     )
 
-    # Send weak spots first
-    weak_spots = [
-        p for p in picks
-        if (p.get("p_hr9_vs_hand") or 0) >= 1.8
-        and (p.get("p_hr_fb_pct") or 0) >= 15
-    ][:5]
+    def _is_ws(p):
+        return p.get("ws_batting_order") is not None
 
-    if weak_spots:
-        await channel.send("## \U0001f3af Pitcher Weak Spots")
-
-    for p in weak_spots:
-        pick_id = f"{p.get('batter_name','?')}_{p.get('game_pk','')}"
-        pick_data = dict(p)
-        pick_store[pick_id] = pick_data
-
+    def _bot_embed(p, color):
         batter = p.get("batter_name", "?")
         bat = _hand_label(p.get("bat_side"))
         pitcher = p.get("pitcher_name", "?")
         phand = _pitcher_hand(p.get("pitcher_hand"))
+        bt = p.get("batter_team") or ""
+        pt = p.get("pitcher_team") or ""
         score = int(p.get("score") or 0)
         odds = _fmt_odds(p.get("hr_odds_best_price"))
-        hr9 = p.get("p_hr9_vs_hand") or 0
-        hrfb = p.get("p_hr_fb_pct") or 0
-        grade_em = GRADE_EMOJI.get(p.get("grade"), "")
-
-        embed = discord.Embed(
+        ws = "\U0001f3af " if _is_ws(p) else ""
+        return discord.Embed(
             description=(
-                f"{grade_em} **{batter}** ({bat}) vs {pitcher} ({phand})\n"
-                f"Pulse **{score}** \u2022 {odds}\n"
-                f"P-HR/9 **{hr9:.2f}** \u2022 HR/FB **{hrfb:.1f}%**"
+                f"{ws}**{batter}** ({bat}) {bt} vs {pitcher} ({phand}) {pt}\n"
+                f"Pulse **{score}** \u2022 {odds} | {_venue_weather_short(p)}\n"
+                f"{_stats_line(p)}"
             ),
-            color=WEAK_SPOT_COLOR,
+            color=color,
         )
-        await channel.send(embed=embed, view=PickView(pick_id))
 
-    # Send IDEAL and FAVORABLE picks
-    for grade in ("IDEAL", "FAVORABLE"):
-        group = [p for p in picks if p.get("grade") == grade][:8]
-        if not group:
-            continue
+    async def _send_pick(p, color):
+        pick_id = f"{p.get('batter_name','?')}_{p.get('game_pk','')}"
+        pick_store[pick_id] = dict(p)
+        await channel.send(embed=_bot_embed(p, color), view=PickView(pick_id))
 
-        emoji = GRADE_EMOJI.get(grade, "")
-        await channel.send(f"## {emoji} {grade} Matchups")
+    # ALL IDEAL picks
+    ideal_picks = [p for p in picks if p.get("grade") == "IDEAL"]
+    if ideal_picks:
+        await channel.send(f"## \U0001f7e2 IDEAL Matchups ({len(ideal_picks)})")
+        for p in ideal_picks:
+            await _send_pick(p, GRADE_COLORS["IDEAL"])
 
-        for p in group:
-            pick_id = f"{p.get('batter_name','?')}_{p.get('game_pk','')}"
-            pick_data = dict(p)
-            pick_store[pick_id] = pick_data
+    # Top 10 FAVORABLE — weak spots sorted first, then by score
+    fav_picks = [p for p in picks if p.get("grade") == "FAVORABLE"]
+    fav_picks.sort(key=lambda p: (_is_ws(p), p.get("score") or 0), reverse=True)
+    fav_top = fav_picks[:10]
 
-            batter = p.get("batter_name", "?")
-            bat = _hand_label(p.get("bat_side"))
-            pitcher = p.get("pitcher_name", "?")
-            phand = _pitcher_hand(p.get("pitcher_hand"))
-            score = int(p.get("score") or 0)
-            odds = _fmt_odds(p.get("hr_odds_best_price"))
-
-            iso = p.get("iso")
-            l15_ev = p.get("l15_ev")
-            l15_bar = p.get("l15_barrel_pct")
-
-            stat_parts = []
-            if iso is not None:
-                stat_parts.append(f"ISO {iso:.3f}")
-            if l15_ev is not None:
-                stat_parts.append(f"EV {l15_ev:.1f}")
-            if l15_bar is not None:
-                stat_parts.append(f"Barrel {l15_bar:.0f}%")
-
-            weather = p.get("weather_indicator") or ""
-            temp = p.get("game_temp")
-            park = p.get("ballpark_name") or ""
-            w_parts = []
-            if weather:
-                w_em = "\U0001f7e2" if weather == "Green" else "\U0001f7e1" if weather == "Yellow" else "\U0001f534"
-                w_parts.append(w_em)
-            if temp:
-                w_parts.append(f"{int(temp)}\u00b0")
-            if park:
-                w_parts.append(park)
-            weather_str = f" ({' '.join(w_parts)})" if w_parts else ""
-
-            embed = discord.Embed(
-                description=(
-                    f"**{batter}** ({bat}) vs {pitcher} ({phand})\n"
-                    f"Pulse **{score}** \u2022 {odds}{weather_str}\n"
-                    f"{' | '.join(stat_parts)}"
-                ),
-                color=GRADE_COLORS.get(grade, 0x6366F1),
-            )
-            await channel.send(embed=embed, view=PickView(pick_id))
+    if fav_top:
+        await channel.send(f"## \U0001f7e1 FAVORABLE Matchups (top {len(fav_top)})")
+        for p in fav_top:
+            await _send_pick(p, GRADE_COLORS["FAVORABLE"])
 
     log.info(f"Sent {len(pick_store)} pick alerts to #{channel.name}")
 

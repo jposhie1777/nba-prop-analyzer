@@ -89,6 +89,15 @@ def _steps(args: argparse.Namespace) -> Iterable[Tuple[str, str]]:
         yield "discord_alerts", "discord_alerts.py"
     if not args.skip_analytics:
         yield "analytics", "analytics.py"
+    # K prop pipeline
+    if not args.skip_fd_k_scraper:
+        yield "fd_k_scraper", "fd_k_scraper.py"
+    if not args.skip_k_model:
+        yield "k_model", "k_model.py"
+    if not args.skip_k_alerts:
+        yield "k_discord_alerts", "k_discord_alerts.py"
+    if not args.skip_k_analytics:
+        yield "k_analytics", "k_analytics.py"
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
@@ -117,6 +126,26 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         "--skip-analytics",
         action="store_true",
         help="Skip analytics.py.",
+    )
+    parser.add_argument(
+        "--skip-fd-k-scraper",
+        action="store_true",
+        help="Skip fd_k_scraper.py (FanDuel K under lines).",
+    )
+    parser.add_argument(
+        "--skip-k-model",
+        action="store_true",
+        help="Skip k_model.py.",
+    )
+    parser.add_argument(
+        "--skip-k-alerts",
+        action="store_true",
+        help="Skip k_discord_alerts.py.",
+    )
+    parser.add_argument(
+        "--skip-k-analytics",
+        action="store_true",
+        help="Skip k_analytics.py.",
     )
     parser.add_argument(
         "--lock-file",

@@ -31,11 +31,11 @@ gcloud run deploy "$SERVICE" \
 
 echo "Setting up Cloud Scheduler for wake/sleep..."
 
-# Wake up at 10 AM ET (14:00 UTC during EDT)
+# Wake up at 7 AM ET (11:00 UTC during EDT)
 gcloud scheduler jobs create http "pulse-bot-wake" \
   --project "$PROJECT" \
   --location "$REGION" \
-  --schedule "0 14 * * *" \
+  --schedule "0 11 * * *" \
   --description "Scale up Discord bot for game hours" \
   --uri "https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/services/$SERVICE" \
   --http-method PATCH \
@@ -46,14 +46,14 @@ gcloud scheduler jobs create http "pulse-bot-wake" \
 gcloud scheduler jobs update http "pulse-bot-wake" \
   --project "$PROJECT" \
   --location "$REGION" \
-  --schedule "0 14 * * *" \
+  --schedule "0 11 * * *" \
   --quiet
 
-# Sleep at midnight ET (04:00 UTC during EDT)
+# Sleep at 8 PM ET (00:00 UTC next day during EDT)
 gcloud scheduler jobs create http "pulse-bot-sleep" \
   --project "$PROJECT" \
   --location "$REGION" \
-  --schedule "0 4 * * *" \
+  --schedule "0 0 * * *" \
   --description "Scale down Discord bot after games" \
   --uri "https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/services/$SERVICE" \
   --http-method PATCH \
@@ -64,9 +64,9 @@ gcloud scheduler jobs create http "pulse-bot-sleep" \
 gcloud scheduler jobs update http "pulse-bot-sleep" \
   --project "$PROJECT" \
   --location "$REGION" \
-  --schedule "0 4 * * *" \
+  --schedule "0 0 * * *" \
   --quiet
 
 echo ""
-echo "Done! Bot will be alive 10 AM - midnight ET daily."
-echo "Estimated cost: ~\$1-2/month"
+echo "Done! Bot will be alive 7 AM - 8 PM ET daily."
+echo "Estimated cost: ~\$1/month"

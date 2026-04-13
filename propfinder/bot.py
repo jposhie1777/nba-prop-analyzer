@@ -120,12 +120,55 @@ def _stats_line(p):
         parts.append(f"P-HR/9 {phr9:.2f}")
     return " | ".join(parts)
 
-# ── State ───────────────────────────────────────────────────────────────────
+# ── State (file-backed to survive Cloud Run restarts) ─────────────────────
+import json as _json
+from pathlib import Path as _Path
+
+_CART_FILE = _Path("/tmp/parlay_carts.json")
+_PICK_FILE = _Path("/tmp/pick_store.json")
+
 # pick_id -> pick data (populated when alerts are sent)
 pick_store: dict[str, dict] = {}
 
 # user_id -> {"dk": {pick_id: pick_data}, "fd": {pick_id: pick_data}}
 user_carts: dict[int, dict[str, dict[str, dict]]] = {}
+
+
+def _load_state():
+    """Load carts and picks from disk on startup."""
+    global user_carts, pick_store
+    try:
+        if _CART_FILE.exists():
+            data = _json.loads(_CART_FILE.read_text())
+            user_carts.update({int(k): v for k, v in data.items()})
+            log.info("Loaded %s carts from disk", len(user_carts))
+    except Exception as e:
+        log.warning("Failed to load carts: %s", e)
+    try:
+        if _PICK_FILE.exists():
+            pick_store.update(_json.loads(_PICK_FILE.read_text()))
+            log.info("Loaded %s picks from disk", len(pick_store))
+    except Exception as e:
+        log.warning("Failed to load picks: %s", e)
+
+
+def _save_carts():
+    """Persist carts to disk."""
+    try:
+        _CART_FILE.write_text(_json.dumps({str(k): v for k, v in user_carts.items()}))
+    except Exception:
+        pass
+
+
+def _save_picks():
+    """Persist pick store to disk."""
+    try:
+        _PICK_FILE.write_text(_json.dumps(pick_store))
+    except Exception:
+        pass
+
+
+_load_state()
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -240,6 +283,7 @@ class PickView(discord.ui.View):
 
         if self.pick_id in book_cart:
             del book_cart[self.pick_id]
+            _save_carts()
             count = len(book_cart)
             await interaction.response.send_message(
                 f"\u274c Removed **{batter}** from {book_label} parlay ({count} leg{'s' if count != 1 else ''})",
@@ -247,6 +291,7 @@ class PickView(discord.ui.View):
             )
         else:
             book_cart[self.pick_id] = pick
+            _save_carts()
             count = len(book_cart)
             await interaction.response.send_message(
                 f"\u2705 Added **{batter}** to {book_label} parlay ({count} leg{'s' if count != 1 else ''})",
@@ -290,10 +335,10 @@ async def on_interaction(interaction: discord.Interaction):
     # Try pick_store first; if not there, build minimal pick from the embed
     pick = pick_store.get(pick_id)
     if not pick:
-        # Extract batter name from pick_id (format: "Name_gamepk")
         batter_name = pick_id.rsplit("_", 1)[0] if "_" in pick_id else pick_id
         pick = {"batter_name": batter_name, "game_pk": pick_id.rsplit("_", 1)[-1] if "_" in pick_id else ""}
         pick_store[pick_id] = pick
+        _save_picks()
 
     cart = user_carts.setdefault(uid, {"dk": {}, "fd": {}})
     book_cart = cart[book]
@@ -301,6 +346,7 @@ async def on_interaction(interaction: discord.Interaction):
 
     if pick_id in book_cart:
         del book_cart[pick_id]
+        _save_carts()
         count = len(book_cart)
         await interaction.response.send_message(
             f"\u274c Removed **{batter}** from {book_label} parlay ({count} leg{'s' if count != 1 else ''})",
@@ -308,6 +354,7 @@ async def on_interaction(interaction: discord.Interaction):
         )
     else:
         book_cart[pick_id] = pick
+        _save_carts()
         count = len(book_cart)
         await interaction.response.send_message(
             f"\u2705 Added **{batter}** to {book_label} parlay ({count} leg{'s' if count != 1 else ''})",
@@ -358,6 +405,7 @@ async def parlay_cmd(interaction: discord.Interaction):
 async def clear_cmd(interaction: discord.Interaction):
     uid = interaction.user.id
     user_carts.pop(uid, None)
+    _save_carts()
     await interaction.response.send_message("\U0001f5d1\ufe0f Parlay cart cleared.", ephemeral=True)
 
 
@@ -461,6 +509,8 @@ async def send_alerts():
         for p in fav_top:
             await _send_pick(p, GRADE_COLORS["FAVORABLE"])
 
+    _save_picks()
+    _save_carts()
     log.info(f"Sent {len(pick_store)} pick alerts to #{channel.name}")
 
 

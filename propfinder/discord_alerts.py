@@ -57,6 +57,41 @@ def _fmt_odds(val):
     return f"+{v}" if v > 0 else str(v)
 
 
+def _build_dk_link(outcome_code, event_id):
+    if not outcome_code or not event_id:
+        return None
+    return f"https://sportsbook.draftkings.com/event/{event_id}?outcomes={outcome_code}"
+
+
+def _build_fd_link(market_id, selection_id):
+    if not market_id or not selection_id:
+        return None
+    return f"https://sportsbook.fanduel.com/addToBetslip?marketId[0]={market_id}&selectionId[0]={selection_id}"
+
+
+def _best_book_line(pick):
+    """Return (odds_str, book_label, deeplink) for DK or FD only."""
+    price = pick.get("hr_odds_best_price")
+    book = (pick.get("hr_odds_best_book") or "").strip()
+
+    dk_link = _build_dk_link(pick.get("dk_outcome_code"), pick.get("dk_event_id"))
+    fd_link = _build_fd_link(pick.get("fd_market_id"), pick.get("fd_selection_id"))
+
+    # If best book IS DK or FD, use that price + link
+    if "draftkings" in book.lower() or "dk" in book.lower():
+        return _fmt_odds(price), "DK", dk_link
+    if "fanduel" in book.lower() or "fd" in book.lower():
+        return _fmt_odds(price), "FD", fd_link
+
+    # Best book is neither — show best price, link to DK (preferred) or FD
+    odds_str = _fmt_odds(price)
+    if dk_link:
+        return odds_str, "DK", dk_link
+    if fd_link:
+        return odds_str, "FD", fd_link
+    return odds_str, "", None
+
+
 def fetch_top_picks():
     """Fetch today's IDEAL and FAVORABLE picks from BigQuery."""
     client = bigquery.Client(project=PROJECT)
@@ -105,15 +140,16 @@ def build_embeds(picks):
             pitcher = p.get("pitcher_name", "?")
             phand = _pitcher_hand(p.get("pitcher_hand"))
             score = int(p.get("score") or 0)
-            odds = _fmt_odds(p.get("hr_odds_best_price"))
+            odds, book_label, link = _best_book_line(p)
             hr9 = p.get("p_hr9_vs_hand") or 0
             hrfb = p.get("p_hr_fb_pct") or 0
             barrel = p.get("p_barrel_pct") or 0
             grade_em = GRADE_EMOJI.get(p.get("grade"), "")
 
+            odds_part = f"[{odds} {book_label}]({link})" if link else odds
             ws_lines.append(
                 f"{grade_em} **{batter}** ({bat}) vs {pitcher} ({phand})\n"
-                f"> Pulse **{score}** \u2022 {odds}\n"
+                f"> Pulse **{score}** \u2022 {odds_part}\n"
                 f"> P-HR/9 **{hr9:.2f}** \u2022 HR/FB **{hrfb:.1f}%** \u2022 P-Barrel {barrel:.1f}%"
             )
 
@@ -141,8 +177,7 @@ def build_embeds(picks):
             pitcher = p.get("pitcher_name", "?")
             phand = _pitcher_hand(p.get("pitcher_hand"))
             score = int(p.get("score") or 0)
-            odds = _fmt_odds(p.get("hr_odds_best_price"))
-            book = p.get("hr_odds_best_book") or ""
+            odds, book_label, link = _best_book_line(p)
 
             iso = p.get("iso")
             l15_ev = p.get("l15_ev")
@@ -175,9 +210,10 @@ def build_embeds(picks):
                     weather_parts.append(park)
                 weather_str = f" ({' '.join(weather_parts)})"
 
+            odds_part = f"[{odds} {book_label}]({link})" if link else odds
             lines.append(
                 f"**{batter}** ({bat}) vs {pitcher} ({phand})\n"
-                f"> Pulse **{score}** \u2022 {odds} {book}{weather_str}\n"
+                f"> Pulse **{score}** \u2022 {odds_part}{weather_str}\n"
                 f"> {stats_str}"
             )
 

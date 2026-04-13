@@ -89,6 +89,42 @@ def build_embeds(picks):
     """Build Discord embeds from picks, grouped by grade."""
     embeds = []
 
+    # Weak spots — IDEAL/FAVORABLE picks where pitcher is exploitable
+    weak_spots = [
+        p for p in picks
+        if (p.get("p_hr9_vs_hand") or 0) >= 1.8
+        and (p.get("p_hr_fb_pct") or 0) >= 15
+        and p.get("grade") in ("IDEAL", "FAVORABLE")
+    ]
+    if weak_spots:
+        weak_spots = weak_spots[:6]
+        ws_lines = []
+        for p in weak_spots:
+            batter = p.get("batter_name", "?")
+            bat = _hand_label(p.get("bat_side"))
+            pitcher = p.get("pitcher_name", "?")
+            phand = _pitcher_hand(p.get("pitcher_hand"))
+            score = int(p.get("score") or 0)
+            odds = _fmt_odds(p.get("hr_odds_best_price"))
+            hr9 = p.get("p_hr9_vs_hand") or 0
+            hrfb = p.get("p_hr_fb_pct") or 0
+            barrel = p.get("p_barrel_pct") or 0
+            grade_em = GRADE_EMOJI.get(p.get("grade"), "")
+
+            ws_lines.append(
+                f"{grade_em} **{batter}** ({bat}) vs {pitcher} ({phand})\n"
+                f"> Pulse **{score}** \u2022 {odds}\n"
+                f"> P-HR/9 **{hr9:.2f}** \u2022 HR/FB **{hrfb:.1f}%** \u2022 P-Barrel {barrel:.1f}%"
+            )
+
+        embeds.append({
+            "title": f"\U0001f3af Pitcher Weak Spots \u2014 {TODAY.strftime('%b %d')}",
+            "description": "\n\n".join(ws_lines),
+            "color": 0xEF4444,  # red
+            "footer": {"text": "Pitchers with HR/9 \u2265 1.80 + HR/FB% \u2265 15%"},
+            "timestamp": datetime.now(ET).isoformat(),
+        })
+
     for grade in ("IDEAL", "FAVORABLE"):
         group = [p for p in picks if p.get("grade") == grade]
         if not group:

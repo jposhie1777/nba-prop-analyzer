@@ -103,6 +103,7 @@ def fetch_top_picks():
       l15_hard_hit_pct, hr_fb_pct,
       p_hr9_vs_hand, p_hr_fb_pct, p_barrel_pct, p_fb_pct,
       hr_odds_best_price, hr_odds_best_book,
+      dk_outcome_code, dk_event_id, fd_market_id, fd_selection_id,
       weather_indicator, game_temp, wind_speed, ballpark_name,
       home_moneyline, away_moneyline, over_under,
       game_pk

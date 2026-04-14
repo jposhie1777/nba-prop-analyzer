@@ -797,7 +797,7 @@ def main():
             "run_date": TODAY.isoformat(),
             "run_timestamp": NOW.isoformat(),
             "game_pk": gpk,
-            "game_date": game_ctx.get(gpk, {}).get("game_date"),
+            "game_date": gd.isoformat() if (gd := game_ctx.get(gpk, {}).get("game_date")) else None,
             "batter_id": batter_id,
             "batter_name": prop.get("batter_name", matchup.get("batter_name", "")),
             "bat_side": bat_side,

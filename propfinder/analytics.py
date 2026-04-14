@@ -487,7 +487,10 @@ def top_ev_picks(days=7):
     ORDER BY ev_estimate DESC
     LIMIT 20
     """
-    params = [bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat())]
+    params = [
+        bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat()),
+        bigquery.ScalarQueryParameter("days", "INT64", days),
+    ]
     return list(client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result())
 
 
@@ -576,7 +579,10 @@ def weather_correlation(days=60):
     GROUP BY weather_indicator
     ORDER BY hr_rate_pct DESC
     """
-    params = [bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat())]
+    params = [
+        bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat()),
+        bigquery.ScalarQueryParameter("days", "INT64", days),
+    ]
     return list(client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result())
 
 
@@ -668,7 +674,10 @@ def pulse_calibration(days=60):
     GROUP BY score_bucket
     ORDER BY score_bucket DESC
     """
-    params = [bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat())]
+    params = [
+        bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat()),
+        bigquery.ScalarQueryParameter("days", "INT64", days),
+    ]
     return list(client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result())
 
 

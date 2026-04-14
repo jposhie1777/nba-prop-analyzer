@@ -570,7 +570,7 @@ def main():
                 "run_date": TODAY.isoformat(),
                 "run_timestamp": NOW.isoformat(),
                 "game_pk": gpk,
-                "game_date": game_ctx.get(gpk, {}).get("game_date"),
+                "game_date": gd.isoformat() if (gd := game_ctx.get(gpk, {}).get("game_date")) else None,
                 "pitcher_id": pitcher_id,
                 "pitcher_name": prop.get("pitcher_name", ""),
                 "pitcher_hand": (pitcher_splits.get("Season", {}).get("pitcher_hand") or ""),

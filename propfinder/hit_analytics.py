@@ -395,7 +395,10 @@ def score_calibration(days=30):
     GROUP BY bucket
     ORDER BY bucket DESC
     """
-    params = [bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat())]
+    params = [
+        bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat()),
+        bigquery.ScalarQueryParameter("days", "INT64", days),
+    ]
     return list(client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result())
 
 
@@ -419,7 +422,10 @@ def batter_reliability(days=60):
     HAVING COUNT(*) >= 3
     ORDER BY hit_rate_pct DESC
     """
-    params = [bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat())]
+    params = [
+        bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat()),
+        bigquery.ScalarQueryParameter("days", "INT64", days),
+    ]
     return list(client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result())
 
 

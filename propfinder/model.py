@@ -988,7 +988,7 @@ def main():
                 "run_date": TODAY.isoformat(),
                 "run_timestamp": NOW.isoformat(),
                 "game_pk": matchup["game_pk"],
-                "game_date": gw.get("game_date"),
+                "game_date": gd.isoformat() if (gd := gw.get("game_date")) else None,
                 "home_team": TEAM_ABBREV.get(home_tid, "") or prop_ctx.get("home_team") or "",
                 "away_team": TEAM_ABBREV.get(away_tid, "") or prop_ctx.get("away_team") or "",
                 "batter_id": matchup["batter_id"],

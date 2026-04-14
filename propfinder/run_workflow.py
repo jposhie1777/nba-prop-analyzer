@@ -80,8 +80,8 @@ def _acquire_lock(lock_file: Path, on_lock: str) -> Tuple[int, object | None]:
 
 def _shared_steps(args: argparse.Namespace) -> Iterable[Tuple[str, str]]:
     """Steps that must succeed before any pipeline runs."""
-    if args.setup:
-        yield "setup_bq", "setup_bq.py"
+    # Always run setup — it's idempotent and ensures schema is up to date
+    yield "setup_bq", "setup_bq.py"
     if not args.skip_ingest:
         yield "ingest", "ingest.py"
 

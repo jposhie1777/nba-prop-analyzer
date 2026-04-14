@@ -199,8 +199,12 @@ def _stats_line(p):
     if iso is not None:
         parts.append(f"ISO {iso:.3f}")
     barrel = p.get("l15_barrel_pct")
+    season_barrel = p.get("season_barrel_pct")
     if barrel is not None:
-        parts.append(f"Barrel {barrel:.0f}%")
+        if barrel == 0 and season_barrel and season_barrel > 0:
+            parts.append(f"Barrel {barrel:.0f}% (szn {season_barrel:.0f}%)")
+        else:
+            parts.append(f"Barrel {barrel:.0f}%")
     ev = p.get("l15_ev")
     if ev is not None:
         parts.append(f"EV {ev:.1f}")

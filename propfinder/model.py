@@ -608,6 +608,13 @@ def compute_batter_metrics(batter_id, bat_side, pitcher_hand_raw, hit_events, sp
         and (not primary or event.get("pitch_type") in primary)
     ]
 
+    # If pitch-type filter leaves too few events, relax to hand-only filter
+    if len(filtered) < 8 and primary:
+        filtered = [
+            event for event in hit_events
+            if event.get("pitch_hand") == hand_char
+        ]
+
     l15 = filtered[:15]
     n15 = len(l15)
     l15_barrel = (
@@ -795,13 +802,23 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw, learned_weights=None
     iso_tier = tier(bm["iso"], B_ISO_ELITE, B_ISO_FAV, B_ISO_AVG)
     slg_tier = tier(bm["slg"], B_SLG_ELITE, B_SLG_FAV, B_SLG_AVG)
     ev_tier = tier(bm["l15_ev"], B_EV_ELITE, B_EV_FAV, B_EV_AVG)
-    barrel_tier = tier(bm["l15_barrel_pct"], B_BAR_ELITE, B_BAR_FAV, B_BAR_AVG)
+
+    # Use season barrel as floor when L15 barrel is 0 (small-sample noise)
+    effective_barrel = bm["l15_barrel_pct"]
+    if effective_barrel == 0.0 and bm["season_barrel_pct"] > 0:
+        effective_barrel = bm["season_barrel_pct"] * 0.7  # discount slightly
+    barrel_tier = tier(effective_barrel, B_BAR_ELITE, B_BAR_FAV, B_BAR_AVG)
 
     points = {"elite": 15, "favorable": 10, "average": 5, "below": 0}
     raw += _w("b_iso", points[iso_tier])
     raw += _w("b_slg", points[slg_tier])
     raw += _w("b_ev", points[ev_tier])
     raw += _w("b_barrel", points[barrel_tier])
+
+    # Penalize truly zero barrel rate — risky for HR bets
+    if bm["l15_barrel_pct"] == 0.0 and bm["season_barrel_pct"] < B_BAR_AVG:
+        raw -= 5
+        flags_bad.append(f"Barrel% {bm['l15_barrel_pct']:.1f}% (no barrels)")
 
     if iso_tier == "below":
         raw -= 1

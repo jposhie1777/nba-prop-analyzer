@@ -134,20 +134,402 @@ def backfill_hr_results(days=3):
         log.info("Updated %s pick results for %s", updated, game_date)
 
 
+# ── 0a-2. League-Wide Outcome Collection ────────────────────────────────
+# Fetch ALL batters from completed games — not just our picks — so the
+# learning engine sees every HR that happened league-wide.
+
+LEAGUE_TABLE = f"{PROJECT}.{DATASET}.hr_league_outcomes"
+
+
+def _safe_float(v):
+    try:
+        return float(v) if v is not None else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def fetch_league_game_data(game_date):
+    """
+    Fetch ALL batters + starting pitchers from every completed game on a date.
+    Uses per-game live feed endpoint for full boxscore + player bio data.
+    Returns list of dicts: {game_pk, batter_id, batter_name, bat_side,
+                            pitcher_id, pitcher_name, pitcher_hand, actual_hr}
+    """
+    import time as _time
+    date_str = game_date.isoformat()
+
+    # Step 1: Get list of completed game PKs from schedule
+    sched_url = f"{MLB_API}/schedule?sportId=1&date={date_str}"
+    req = Request(sched_url, headers={"User-Agent": "PulseSports/1.0"})
+    try:
+        with urlopen(req, timeout=15) as resp:
+            sched = json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        log.warning("Failed to fetch MLB schedule for %s: %s", date_str, exc)
+        return []
+
+    game_pks = []
+    for date_entry in sched.get("dates", []):
+        for game in date_entry.get("games", []):
+            if game.get("status", {}).get("abstractGameCode") == "F":
+                gpk = game.get("gamePk")
+                if gpk:
+                    game_pks.append(gpk)
+
+    if not game_pks:
+        log.info("No completed games for %s", date_str)
+        return []
+
+    log.info("Fetching boxscores for %s completed games on %s", len(game_pks), date_str)
+
+    # Step 2: Fetch each game's live feed for full boxscore + player bios
+    rows = []
+    for gpk in game_pks:
+        feed_url = f"https://statsapi.mlb.com/api/v1.1/game/{gpk}/feed/live"
+        req = Request(feed_url, headers={"User-Agent": "PulseSports/1.0"})
+        try:
+            with urlopen(req, timeout=15) as resp:
+                feed = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            log.debug("Failed to fetch live feed for game %s: %s", gpk, exc)
+            continue
+
+        # Player bio data (batSide, pitchHand) lives in gameData.players
+        gd_players = feed.get("gameData", {}).get("players", {})
+        bio = {}  # player_id → {bat_side, pitch_hand, name}
+        for pid_str, pdata in gd_players.items():
+            pid = int(pid_str.replace("ID", ""))
+            bio[pid] = {
+                "name": pdata.get("fullName", "Unknown"),
+                "bat_side": pdata.get("batSide", {}).get("code", "R"),
+                "pitch_hand": pdata.get("pitchHand", {}).get("code", "R"),
+            }
+
+        boxscore = feed.get("liveData", {}).get("boxscore", {})
+        teams_box = boxscore.get("teams", {})
+
+        # Determine starting pitcher for each side (first in pitchers list)
+        starters = {}
+        for side in ("away", "home"):
+            pitcher_ids = teams_box.get(side, {}).get("pitchers", [])
+            if pitcher_ids:
+                sp_id = pitcher_ids[0]
+                sp_bio = bio.get(sp_id, {})
+                starters[side] = {
+                    "id": sp_id,
+                    "name": sp_bio.get("name", "Unknown"),
+                    "hand": sp_bio.get("pitch_hand", "R"),
+                }
+
+        if not starters.get("away") or not starters.get("home"):
+            log.debug("Skipping game %s — missing starter info", gpk)
+            continue
+
+        # Each batter faces the OPPOSING team's starter
+        opp_starter = {"away": starters["home"], "home": starters["away"]}
+
+        for side in ("away", "home"):
+            sp = opp_starter[side]
+            players = teams_box.get(side, {}).get("players", {})
+            for pid_str, player_data in players.items():
+                pid = int(pid_str.replace("ID", ""))
+                batting = player_data.get("stats", {}).get("batting", {})
+                ab = int(batting.get("atBats", 0))
+                if ab == 0:
+                    continue
+
+                p_bio = bio.get(pid, {})
+                rows.append({
+                    "game_pk": gpk,
+                    "batter_id": pid,
+                    "batter_name": p_bio.get("name", "Unknown"),
+                    "bat_side": p_bio.get("bat_side", "R"),
+                    "pitcher_id": sp["id"],
+                    "pitcher_name": sp["name"],
+                    "pitcher_hand": sp["hand"],
+                    "actual_hr": int(batting.get("homeRuns", 0)),
+                })
+
+        _time.sleep(0.3)  # rate-limit MLB API calls
+
+    log.info("Fetched %s batter appearances for %s (%s with HRs)",
+             len(rows), date_str,
+             sum(1 for r in rows if r["actual_hr"] > 0))
+    return rows
+
+
+def _load_pregame_batter_stats(game_date):
+    """Load batter L15 stats from raw_hit_data snapshot on game_date.
+    Returns dict: batter_id → {l15_ev, l15_barrel_pct, l15_hard_hit_pct}."""
+    date_str = game_date.isoformat()
+    sql = f"""
+    WITH deduped AS (
+        SELECT *,
+            ROW_NUMBER() OVER (
+                PARTITION BY batter_id, event_date, pitch_type,
+                    CAST(launch_speed AS STRING), CAST(launch_angle AS STRING)
+                ORDER BY ingested_at DESC
+            ) AS _rn
+        FROM `{PROJECT}.{DATASET}.raw_hit_data`
+        WHERE run_date = '{date_str}'
+    ),
+    ranked AS (
+        SELECT batter_id, launch_speed, is_barrel,
+            ROW_NUMBER() OVER (PARTITION BY batter_id ORDER BY event_date DESC) AS ev_rank
+        FROM deduped
+        WHERE _rn = 1
+    )
+    SELECT
+        batter_id,
+        AVG(IF(ev_rank <= 15, launch_speed, NULL)) AS l15_ev,
+        SAFE_DIVIDE(
+            COUNTIF(ev_rank <= 15 AND is_barrel),
+            COUNTIF(ev_rank <= 15)
+        ) * 100 AS l15_barrel_pct,
+        SAFE_DIVIDE(
+            COUNTIF(ev_rank <= 15 AND launch_speed >= 95),
+            COUNTIF(ev_rank <= 15)
+        ) * 100 AS l15_hard_hit_pct
+    FROM ranked
+    GROUP BY batter_id
+    """
+    try:
+        rows = list(client.query(sql).result())
+        return {int(r.batter_id): {
+            "l15_ev": round(float(r.l15_ev or 0), 1),
+            "l15_barrel_pct": round(float(r.l15_barrel_pct or 0), 1),
+            "l15_hard_hit_pct": round(float(r.l15_hard_hit_pct or 0), 1),
+        } for r in rows}
+    except Exception as exc:
+        log.warning("Could not load pregame batter stats for %s: %s", date_str, exc)
+        return {}
+
+
+def _load_pregame_splits(game_date):
+    """Load batter ISO/SLG splits from raw_splits snapshot on game_date.
+    Returns dict: (batter_id, split) → {iso, slg}."""
+    date_str = game_date.isoformat()
+    sql = f"""
+    SELECT batter_id, split_code, at_bats, doubles, triples, home_runs, slg
+    FROM `{PROJECT}.{DATASET}.raw_splits`
+    WHERE run_date = '{date_str}'
+      AND split_code IN ('vl', 'vr')
+    """
+    try:
+        rows = list(client.query(sql).result())
+        result = {}
+        for r in rows:
+            ab = int(r.at_bats or 0)
+            d = int(r.doubles or 0)
+            t = int(r.triples or 0)
+            hr = int(r.home_runs or 0)
+            iso = (d + 2 * t + 3 * hr) / ab if ab > 0 else 0.0
+            result[(int(r.batter_id), r.split_code)] = {
+                "iso": round(iso, 3),
+                "slg": round(float(r.slg or 0), 3),
+            }
+        return result
+    except Exception as exc:
+        log.warning("Could not load pregame splits for %s: %s", date_str, exc)
+        return {}
+
+
+def _load_pregame_pitcher_stats(game_date):
+    """Load pitcher stats from raw_pitcher_matchup snapshot on game_date.
+    Returns dict: (pitcher_id, split) → {p_hr9, p_hr_fb_pct, p_fb_pct, p_barrel_pct, p_hard_hit_pct}."""
+    date_str = game_date.isoformat()
+    sql = f"""
+    SELECT pitcher_id, split,
+        hr_per_9, hr_fb_pct, fb_pct, barrel_pct, hard_hit_pct, ip, home_runs
+    FROM `{PROJECT}.{DATASET}.raw_pitcher_matchup`
+    WHERE run_date = '{date_str}'
+      AND split IN ('vsLHB', 'vsRHB', 'Season')
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY pitcher_id, split
+        ORDER BY ingested_at DESC
+    ) = 1
+    """
+    try:
+        rows = list(client.query(sql).result())
+        result = {}
+        for r in rows:
+            p_hr9 = _safe_float(r.hr_per_9)
+            p_barrel = _safe_float(r.barrel_pct)
+            if p_barrel > 0 and p_barrel < 1:
+                p_barrel *= 100
+            p_fb = _safe_float(r.fb_pct)
+            if p_fb > 0 and p_fb < 1:
+                p_fb *= 100
+            p_hh = _safe_float(r.hard_hit_pct)
+            if p_hh > 0 and p_hh < 1:
+                p_hh *= 100
+
+            stored_hrfb = _safe_float(r.hr_fb_pct)
+            if stored_hrfb > 0:
+                p_hrfb = stored_hrfb
+            else:
+                ip = _safe_float(r.ip)
+                hr_n = int(r.home_runs or 0)
+                est_fb = ip * (p_fb / 100) * 1.2 if ip > 0 and p_fb > 0 else 0
+                p_hrfb = min((hr_n / est_fb) * 100, 60.0) if est_fb > 0 else 0.0
+
+            result[(int(r.pitcher_id), r.split)] = {
+                "p_hr9": round(p_hr9, 2),
+                "p_hr_fb_pct": round(p_hrfb, 1),
+                "p_fb_pct": round(p_fb, 1),
+                "p_barrel_pct": round(p_barrel, 1),
+                "p_hard_hit_pct": round(p_hh, 1),
+            }
+        return result
+    except Exception as exc:
+        log.warning("Could not load pregame pitcher stats for %s: %s", date_str, exc)
+        return {}
+
+
+def _load_our_picks(game_date):
+    """Load our model's picks for a date so we can mark was_picked + pulse_score.
+    Returns dict: (game_pk, batter_id) → {score, grade}."""
+    date_str = game_date.isoformat()
+    sql = f"""
+    SELECT game_pk, batter_id, score, grade
+    FROM `{PROJECT}.{DATASET}.hr_picks_daily`
+    WHERE run_date = '{date_str}'
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY game_pk, batter_id ORDER BY score DESC
+    ) = 1
+    """
+    try:
+        rows = list(client.query(sql).result())
+        return {(int(r.game_pk), int(r.batter_id)): {
+            "score": float(r.score or 0),
+            "grade": r.grade,
+        } for r in rows}
+    except Exception as exc:
+        log.warning("Could not load picks for %s: %s", date_str, exc)
+        return {}
+
+
+def collect_league_outcomes(days=3):
+    """
+    The league-wide learning engine feeder.
+    For each of the past N days, fetch ALL batters from ALL completed games,
+    enrich with pre-game stats from our raw tables, and store in hr_league_outcomes.
+    This gives the weight calibration 10x the data compared to just our picks.
+    """
+    for d in range(1, days + 1):
+        game_date = TODAY - timedelta(days=d)
+        log.info("Collecting league-wide outcomes for %s", game_date)
+
+        # Check if we already collected this date
+        try:
+            check = list(client.query(f"""
+                SELECT COUNT(*) AS n FROM `{LEAGUE_TABLE}`
+                WHERE game_date = '{game_date.isoformat()}'
+            """).result())
+            if check and check[0].n > 0:
+                log.info("Already collected %s outcomes for %s — skipping",
+                         check[0].n, game_date)
+                continue
+        except Exception:
+            pass  # table might not exist yet
+
+        # 1. Fetch all batters + HRs from MLB boxscores
+        game_rows = fetch_league_game_data(game_date)
+        if not game_rows:
+            log.info("No completed games for %s", game_date)
+            continue
+
+        # 2. Load pre-game stat snapshots
+        batter_stats = _load_pregame_batter_stats(game_date)
+        splits_map = _load_pregame_splits(game_date)
+        pitcher_stats = _load_pregame_pitcher_stats(game_date)
+        our_picks = _load_our_picks(game_date)
+
+        log.info("Pre-game data: %s batters, %s splits, %s pitchers, %s picks",
+                 len(batter_stats), len(splits_map), len(pitcher_stats), len(our_picks))
+
+        # 3. Enrich and build output rows
+        output_rows = []
+        for row in game_rows:
+            bid = row["batter_id"]
+            pid = row["pitcher_id"]
+            bat_side = row["bat_side"]
+            pitcher_hand = row["pitcher_hand"]
+
+            # Batter L15 stats
+            b_stats = batter_stats.get(bid, {})
+
+            # Batter ISO/SLG vs this pitcher's hand
+            split_key = "vl" if pitcher_hand == "L" else "vr"
+            b_splits = splits_map.get((bid, split_key), {})
+
+            # Pitcher stats vs this batter's hand
+            p_split_key = "vsLHB" if bat_side == "L" else "vsRHB"
+            p_stats = pitcher_stats.get((pid, p_split_key), {})
+            if not p_stats:
+                p_stats = pitcher_stats.get((pid, "Season"), {})
+
+            # Our pick info
+            pick = our_picks.get((row["game_pk"], bid))
+
+            output_rows.append({
+                "game_date": game_date.isoformat(),
+                "game_pk": row["game_pk"],
+                "batter_id": bid,
+                "batter_name": row["batter_name"],
+                "bat_side": bat_side,
+                "pitcher_id": pid,
+                "pitcher_name": row["pitcher_name"],
+                "pitcher_hand": pitcher_hand,
+                "iso": b_splits.get("iso"),
+                "slg": b_splits.get("slg"),
+                "l15_ev": b_stats.get("l15_ev"),
+                "l15_barrel_pct": b_stats.get("l15_barrel_pct"),
+                "l15_hard_hit_pct": b_stats.get("l15_hard_hit_pct"),
+                "p_hr9_vs_hand": p_stats.get("p_hr9"),
+                "p_hr_fb_pct": p_stats.get("p_hr_fb_pct"),
+                "p_fb_pct": p_stats.get("p_fb_pct"),
+                "p_barrel_pct": p_stats.get("p_barrel_pct"),
+                "p_hard_hit_pct": p_stats.get("p_hard_hit_pct"),
+                "actual_hr": row["actual_hr"],
+                "hit": row["actual_hr"] >= 1,
+                "was_picked": pick is not None,
+                "pulse_score": pick["score"] if pick else None,
+                "grade": pick["grade"] if pick else None,
+                "collected_at": NOW.isoformat(),
+            })
+
+        # 4. Insert into BigQuery
+        if output_rows:
+            errors = client.insert_rows_json(LEAGUE_TABLE, output_rows)
+            if errors:
+                log.error("BQ insert errors for hr_league_outcomes: %s", errors[:3])
+            else:
+                hr_count = sum(1 for r in output_rows if r["hit"])
+                picked_count = sum(1 for r in output_rows if r["was_picked"])
+                log.info(
+                    "Wrote %s league outcomes for %s — %s HRs, %s were our picks",
+                    len(output_rows), game_date, hr_count, picked_count,
+                )
+
+
 # ── 0b. Self-Learning Weight Calibration ─────────────────────────────────
 
 def calibrate_hr_weights(days=30):
     """
     The HR learning engine. Adjusts factor weights based on correlation
-    with actual HR outcomes.
+    with actual HR outcomes from LEAGUE-WIDE data (all batters, not just picks).
 
-    Strategy (mirrors k_analytics.py):
+    Uses hr_league_outcomes as the primary data source for 10x more samples.
+    Falls back to hr_picks_daily if league outcomes table is empty.
+
+    Strategy:
     - Factors with positive correlation to HR hits → boost weight
     - Factors with negative/zero correlation → dampen weight
     - Apply learning rate to avoid wild swings
     - Enforce floor/ceiling to keep all factors in play
     """
-    log.info("Starting HR weight calibration with %s-day lookback", days)
+    log.info("Starting HR weight calibration with %s-day lookback (league-wide)", days)
 
     # Load current weights (most recent from hr_model_weights)
     try:
@@ -160,20 +542,52 @@ def calibrate_hr_weights(days=30):
     except Exception:
         current_weights = dict(BASELINE_WEIGHTS)
 
+    # Try league-wide data first, fall back to picks-only
+    league_count = 0
+    try:
+        check = list(client.query(f"""
+            SELECT COUNT(*) AS n FROM `{LEAGUE_TABLE}`
+            WHERE game_date >= DATE_SUB(@today, INTERVAL @days DAY)
+        """, job_config=bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat()),
+            bigquery.ScalarQueryParameter("days", "INT64", days),
+        ])).result())
+        league_count = check[0].n if check else 0
+    except Exception:
+        pass
+
+    use_league = league_count >= MIN_SAMPLE_SIZE
+    if use_league:
+        source_name = "league-wide"
+        log.info("Using league-wide outcomes for calibration (%s rows)", league_count)
+    else:
+        source_name = "picks-only (league data not yet available)"
+        log.info("League data insufficient (%s rows) — falling back to picks-only", league_count)
+
     # Compute per-factor correlation with actual HR outcomes
+    # hr_league_outcomes uses game_date; hr_picks_daily uses run_date
+    if use_league:
+        source_cte = f"""
+        SELECT * FROM `{LEAGUE_TABLE}`
+        WHERE game_date >= DATE_SUB(@today, INTERVAL @days DAY)
+          AND actual_hr IS NOT NULL AND hit IS NOT NULL
+        """
+    else:
+        source_cte = f"""
+        SELECT * FROM {TABLE}.hr_picks_daily`
+        WHERE run_date >= DATE_SUB(@today, INTERVAL @days DAY)
+          AND actual_hr IS NOT NULL AND hit IS NOT NULL
+        """
+
     sql = f"""
-    WITH picks AS (
-      SELECT *
-      FROM {TABLE}.hr_picks_daily`
-      WHERE run_date >= DATE_SUB(@today, INTERVAL @days DAY)
-        AND actual_hr IS NOT NULL
-        AND hit IS NOT NULL
+    WITH outcomes AS (
+      {source_cte}
     ),
     overall AS (
       SELECT
         SAFE_DIVIDE(SUM(CASE WHEN hit THEN 1 ELSE 0 END), COUNT(*)) AS base_hit_rate,
         COUNT(*) AS total
-      FROM picks
+      FROM outcomes
     )
     -- Pitcher HR/9 vs hand
     SELECT 'p_hr9_vs_hand' AS factor,
@@ -181,75 +595,75 @@ def calibrate_hr_weights(days=30):
                   NULLIF(SUM(CASE WHEN p_hr9_vs_hand >= 1.8 THEN 1 ELSE 0 END), 0)) AS high_hr,
       CORR(p_hr9_vs_hand, CAST(hit AS INT64)) AS corr,
       COUNT(*) AS n
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'p_hr_fb_pct',
       SAFE_DIVIDE(SUM(CASE WHEN p_hr_fb_pct >= 15 AND hit THEN 1 ELSE 0 END),
                   NULLIF(SUM(CASE WHEN p_hr_fb_pct >= 15 THEN 1 ELSE 0 END), 0)),
       CORR(p_hr_fb_pct, CAST(hit AS INT64)), COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'p_fb_pct',
       SAFE_DIVIDE(SUM(CASE WHEN p_fb_pct >= 40 AND hit THEN 1 ELSE 0 END),
                   NULLIF(SUM(CASE WHEN p_fb_pct >= 40 THEN 1 ELSE 0 END), 0)),
       CORR(p_fb_pct, CAST(hit AS INT64)), COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'p_barrel_pct',
       SAFE_DIVIDE(SUM(CASE WHEN p_barrel_pct >= 10 AND hit THEN 1 ELSE 0 END),
                   NULLIF(SUM(CASE WHEN p_barrel_pct >= 10 THEN 1 ELSE 0 END), 0)),
       CORR(p_barrel_pct, CAST(hit AS INT64)), COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'p_hard_hit_pct',
       SAFE_DIVIDE(SUM(CASE WHEN p_hard_hit_pct >= 40 AND hit THEN 1 ELSE 0 END),
                   NULLIF(SUM(CASE WHEN p_hard_hit_pct >= 40 THEN 1 ELSE 0 END), 0)),
       CORR(p_hard_hit_pct, CAST(hit AS INT64)), COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'b_iso',
       SAFE_DIVIDE(SUM(CASE WHEN iso >= 0.300 AND hit THEN 1 ELSE 0 END),
                   NULLIF(SUM(CASE WHEN iso >= 0.300 THEN 1 ELSE 0 END), 0)),
       CORR(iso, CAST(hit AS INT64)), COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'b_slg',
       SAFE_DIVIDE(SUM(CASE WHEN slg >= 0.500 AND hit THEN 1 ELSE 0 END),
                   NULLIF(SUM(CASE WHEN slg >= 0.500 THEN 1 ELSE 0 END), 0)),
       CORR(slg, CAST(hit AS INT64)), COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'b_ev',
       SAFE_DIVIDE(SUM(CASE WHEN l15_ev >= 92 AND hit THEN 1 ELSE 0 END),
                   NULLIF(SUM(CASE WHEN l15_ev >= 92 THEN 1 ELSE 0 END), 0)),
       CORR(l15_ev, CAST(hit AS INT64)), COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'b_barrel',
       SAFE_DIVIDE(SUM(CASE WHEN l15_barrel_pct >= 20 AND hit THEN 1 ELSE 0 END),
                   NULLIF(SUM(CASE WHEN l15_barrel_pct >= 20 THEN 1 ELSE 0 END), 0)),
       CORR(l15_barrel_pct, CAST(hit AS INT64)), COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'p_iso_allowed', NULL, NULL, COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'platoon', NULL, NULL, COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
 
     UNION ALL
     SELECT 'hot_form', NULL, NULL, COUNT(*)
-    FROM picks, overall
+    FROM outcomes, overall
     """
     params = [
         bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat()),
@@ -339,7 +753,8 @@ def calibrate_hr_weights(days=30):
         if errors:
             log.error("BQ insert errors for hr_model_weights: %s", errors[:3])
         else:
-            log.info("Wrote %s calibrated HR weights to hr_model_weights", len(weight_rows))
+            log.info("Wrote %s calibrated HR weights to hr_model_weights (source: %s)",
+                     len(weight_rows), source_name)
 
 
 # ── 1. Results Tracking ────────────────────────────────────────────────────
@@ -732,13 +1147,16 @@ def main():
     log.info("Step 1: Backfilling HR results (last 3 days)...")
     backfill_hr_results(days=3)
 
-    log.info("Step 2: Calibrating HR weights...")
+    log.info("Step 2: Collecting league-wide outcomes (last 3 days)...")
+    collect_league_outcomes(days=3)
+
+    log.info("Step 3: Calibrating HR weights (league-wide)...")
     calibrate_hr_weights(days=30)
 
-    log.info("Step 3: Setting up analytics views...")
+    log.info("Step 4: Setting up analytics views...")
     setup_all()
 
-    log.info("Step 4: Generating report...")
+    log.info("Step 5: Generating report...")
     print_report(30)
 
 

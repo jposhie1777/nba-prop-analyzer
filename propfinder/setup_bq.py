@@ -486,4 +486,40 @@ for tbl_name in ["hr_picks_daily", "k_picks_daily", "hit_picks_daily"]:
     except Exception as exc:
         print(f"Could not update {tbl_name} schema: {exc}")
 
+# ── hr_league_outcomes — ALL batters league-wide with pre-game stats + HR result
+client.create_table(bigquery.Table(
+    f"{PROJECT}.{DATASET}.hr_league_outcomes",
+    schema=[
+        bigquery.SchemaField("game_date",          "DATE"),
+        bigquery.SchemaField("game_pk",             "INTEGER"),
+        bigquery.SchemaField("batter_id",           "INTEGER"),
+        bigquery.SchemaField("batter_name",         "STRING"),
+        bigquery.SchemaField("bat_side",            "STRING"),
+        bigquery.SchemaField("pitcher_id",          "INTEGER"),
+        bigquery.SchemaField("pitcher_name",        "STRING"),
+        bigquery.SchemaField("pitcher_hand",        "STRING"),
+        # Batter pre-game factors (from raw tables snapshot on game_date)
+        bigquery.SchemaField("iso",                 "FLOAT"),
+        bigquery.SchemaField("slg",                 "FLOAT"),
+        bigquery.SchemaField("l15_ev",              "FLOAT"),
+        bigquery.SchemaField("l15_barrel_pct",      "FLOAT"),
+        bigquery.SchemaField("l15_hard_hit_pct",    "FLOAT"),
+        # Pitcher pre-game factors
+        bigquery.SchemaField("p_hr9_vs_hand",       "FLOAT"),
+        bigquery.SchemaField("p_hr_fb_pct",         "FLOAT"),
+        bigquery.SchemaField("p_fb_pct",            "FLOAT"),
+        bigquery.SchemaField("p_barrel_pct",        "FLOAT"),
+        bigquery.SchemaField("p_hard_hit_pct",      "FLOAT"),
+        # Outcome
+        bigquery.SchemaField("actual_hr",           "INTEGER"),
+        bigquery.SchemaField("hit",                 "BOOLEAN"),
+        # Whether our model picked this batter that day
+        bigquery.SchemaField("was_picked",          "BOOLEAN"),
+        bigquery.SchemaField("pulse_score",         "FLOAT"),
+        bigquery.SchemaField("grade",               "STRING"),
+        bigquery.SchemaField("collected_at",        "TIMESTAMP"),
+    ]
+), exists_ok=True)
+print("Created hr_league_outcomes")
+
 print("\nAll tables created successfully.")

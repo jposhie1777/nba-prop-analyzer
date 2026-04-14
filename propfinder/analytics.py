@@ -5,9 +5,11 @@ pitcher exploitability, stacking, and CLV tracking.
 Run standalone to generate a daily analytics report, or import individual functions.
 """
 
+import json
 import logging
 import os
 from datetime import datetime, timedelta
+from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from google.cloud import bigquery
@@ -19,64 +21,372 @@ PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", "graphite-flare-477419-h7")
 DATASET = "propfinder"
 ET = ZoneInfo("America/New_York")
 TODAY = datetime.now(ET).date()
+NOW = datetime.now(ET)
+MLB_API = "https://statsapi.mlb.com/api/v1"
 
 client = bigquery.Client(project=PROJECT)
 
 TABLE = f"`{PROJECT}.{DATASET}"
+
+# ── HR Model Baseline Weights ────────────────────────────────────────────
+# These map to the scoring factors in model.py compute_pulse_score().
+# Each factor's weight controls how many raw points it contributes.
+BASELINE_WEIGHTS = {
+    "p_hr9_vs_hand":   20.0,   # Pitcher HR/9 vs handedness
+    "p_hr_fb_pct":     18.0,   # Pitcher HR/FB%
+    "p_fb_pct":         8.0,   # Pitcher fly-ball rate
+    "p_barrel_pct":     7.0,   # Pitcher barrel% allowed
+    "p_hard_hit_pct":   5.0,   # Pitcher hard-hit% allowed
+    "p_iso_allowed":    4.0,   # Pitcher ISO allowed
+    "platoon":          3.0,   # Platoon edge (same-hand)
+    "b_iso":           15.0,   # Batter ISO
+    "b_slg":           15.0,   # Batter SLG
+    "b_ev":            15.0,   # Batter L15 exit velocity
+    "b_barrel":        15.0,   # Batter L15 barrel%
+    "hot_form":         4.0,   # Hot-form bonus (elite EV + barrel + HH%)
+}
+
+LEARNING_RATE = 0.15          # How aggressively weights shift per cycle
+MIN_SAMPLE_SIZE = 20          # Need this many results before adjusting
+WEIGHT_FLOOR = 1.0            # Never let a weight drop below this
+WEIGHT_CEILING = 25.0         # Never let a weight exceed this
+
+
+# ── 0a. Results Backfill: Fetch actual HRs from MLB API ──────────────────
+
+def fetch_actual_home_runs(game_date):
+    """
+    Fetch actual batter HR totals for all games on a given date.
+    Returns dict: (game_pk, batter_id) → actual_hr_count.
+    """
+    date_str = game_date.isoformat()
+    url = f"{MLB_API}/schedule?sportId=1&date={date_str}&hydrate=boxscore"
+    req = Request(url, headers={"User-Agent": "PulseSports/1.0"})
+    try:
+        with urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        log.warning("Failed to fetch MLB schedule for %s: %s", date_str, exc)
+        return {}
+
+    results = {}
+    for date_entry in data.get("dates", []):
+        for game in date_entry.get("games", []):
+            if game.get("status", {}).get("abstractGameCode") != "F":
+                continue
+            game_pk = game.get("gamePk")
+            if not game_pk:
+                continue
+            boxscore = game.get("boxscore") or {}
+            teams = boxscore.get("teams", {})
+            for side in ("away", "home"):
+                players = teams.get(side, {}).get("players", {})
+                for pid_str, player_data in players.items():
+                    pid = int(pid_str.replace("ID", ""))
+                    stats = player_data.get("stats", {}).get("batting", {})
+                    if stats:
+                        hr = int(stats.get("homeRuns", 0))
+                        results[(game_pk, pid)] = hr
+    return results
+
+
+def backfill_hr_results(days=3):
+    """
+    For each of the past N days, fetch actual HR totals and update hr_picks_daily.
+    """
+    for d in range(1, days + 1):
+        game_date = TODAY - timedelta(days=d)
+        log.info("Backfilling HR results for %s", game_date)
+
+        actuals = fetch_actual_home_runs(game_date)
+        if not actuals:
+            log.info("No completed games found for %s", game_date)
+            continue
+
+        updated = 0
+        for (game_pk, batter_id), actual_hr in actuals.items():
+            update_sql = f"""
+            UPDATE {TABLE}.hr_picks_daily`
+            SET actual_hr = @actual_hr,
+                hit = (@actual_hr >= 1)
+            WHERE run_date = @run_date
+              AND game_pk = @game_pk
+              AND batter_id = @batter_id
+              AND actual_hr IS NULL
+            """
+            params = [
+                bigquery.ScalarQueryParameter("actual_hr", "INT64", actual_hr),
+                bigquery.ScalarQueryParameter("run_date", "DATE", game_date.isoformat()),
+                bigquery.ScalarQueryParameter("game_pk", "INT64", game_pk),
+                bigquery.ScalarQueryParameter("batter_id", "INT64", batter_id),
+            ]
+            try:
+                job = client.query(
+                    update_sql,
+                    job_config=bigquery.QueryJobConfig(query_parameters=params),
+                )
+                job.result()
+                if job.num_dml_affected_rows and job.num_dml_affected_rows > 0:
+                    updated += 1
+            except Exception as exc:
+                log.debug("Update failed for game %s batter %s: %s", game_pk, batter_id, exc)
+
+        log.info("Updated %s pick results for %s", updated, game_date)
+
+
+# ── 0b. Self-Learning Weight Calibration ─────────────────────────────────
+
+def calibrate_hr_weights(days=30):
+    """
+    The HR learning engine. Adjusts factor weights based on correlation
+    with actual HR outcomes.
+
+    Strategy (mirrors k_analytics.py):
+    - Factors with positive correlation to HR hits → boost weight
+    - Factors with negative/zero correlation → dampen weight
+    - Apply learning rate to avoid wild swings
+    - Enforce floor/ceiling to keep all factors in play
+    """
+    log.info("Starting HR weight calibration with %s-day lookback", days)
+
+    # Load current weights (most recent from hr_model_weights)
+    try:
+        rows = list(client.query(f"""
+            SELECT factor, weight
+            FROM {TABLE}.hr_model_weights`
+            WHERE run_date = (SELECT MAX(run_date) FROM {TABLE}.hr_model_weights`)
+        """).result())
+        current_weights = {r.factor: r.weight for r in rows} if rows else dict(BASELINE_WEIGHTS)
+    except Exception:
+        current_weights = dict(BASELINE_WEIGHTS)
+
+    # Compute per-factor correlation with actual HR outcomes
+    sql = f"""
+    WITH picks AS (
+      SELECT *
+      FROM {TABLE}.hr_picks_daily`
+      WHERE run_date >= DATE_SUB(@today, INTERVAL @days DAY)
+        AND actual_hr IS NOT NULL
+        AND hit IS NOT NULL
+    ),
+    overall AS (
+      SELECT
+        SAFE_DIVIDE(SUM(CASE WHEN hit THEN 1 ELSE 0 END), COUNT(*)) AS base_hit_rate,
+        COUNT(*) AS total
+      FROM picks
+    )
+    -- Pitcher HR/9 vs hand
+    SELECT 'p_hr9_vs_hand' AS factor,
+      SAFE_DIVIDE(SUM(CASE WHEN p_hr9_vs_hand >= 1.8 AND hit THEN 1 ELSE 0 END),
+                  NULLIF(SUM(CASE WHEN p_hr9_vs_hand >= 1.8 THEN 1 ELSE 0 END), 0)) AS high_hr,
+      CORR(p_hr9_vs_hand, CAST(hit AS INT64)) AS corr,
+      COUNT(*) AS n
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'p_hr_fb_pct',
+      SAFE_DIVIDE(SUM(CASE WHEN p_hr_fb_pct >= 15 AND hit THEN 1 ELSE 0 END),
+                  NULLIF(SUM(CASE WHEN p_hr_fb_pct >= 15 THEN 1 ELSE 0 END), 0)),
+      CORR(p_hr_fb_pct, CAST(hit AS INT64)), COUNT(*)
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'p_fb_pct',
+      SAFE_DIVIDE(SUM(CASE WHEN p_fb_pct >= 40 AND hit THEN 1 ELSE 0 END),
+                  NULLIF(SUM(CASE WHEN p_fb_pct >= 40 THEN 1 ELSE 0 END), 0)),
+      CORR(p_fb_pct, CAST(hit AS INT64)), COUNT(*)
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'p_barrel_pct',
+      SAFE_DIVIDE(SUM(CASE WHEN p_barrel_pct >= 10 AND hit THEN 1 ELSE 0 END),
+                  NULLIF(SUM(CASE WHEN p_barrel_pct >= 10 THEN 1 ELSE 0 END), 0)),
+      CORR(p_barrel_pct, CAST(hit AS INT64)), COUNT(*)
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'p_hard_hit_pct',
+      SAFE_DIVIDE(SUM(CASE WHEN p_hard_hit_pct >= 40 AND hit THEN 1 ELSE 0 END),
+                  NULLIF(SUM(CASE WHEN p_hard_hit_pct >= 40 THEN 1 ELSE 0 END), 0)),
+      CORR(p_hard_hit_pct, CAST(hit AS INT64)), COUNT(*)
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'b_iso',
+      SAFE_DIVIDE(SUM(CASE WHEN iso >= 0.300 AND hit THEN 1 ELSE 0 END),
+                  NULLIF(SUM(CASE WHEN iso >= 0.300 THEN 1 ELSE 0 END), 0)),
+      CORR(iso, CAST(hit AS INT64)), COUNT(*)
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'b_slg',
+      SAFE_DIVIDE(SUM(CASE WHEN slg >= 0.500 AND hit THEN 1 ELSE 0 END),
+                  NULLIF(SUM(CASE WHEN slg >= 0.500 THEN 1 ELSE 0 END), 0)),
+      CORR(slg, CAST(hit AS INT64)), COUNT(*)
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'b_ev',
+      SAFE_DIVIDE(SUM(CASE WHEN l15_ev >= 92 AND hit THEN 1 ELSE 0 END),
+                  NULLIF(SUM(CASE WHEN l15_ev >= 92 THEN 1 ELSE 0 END), 0)),
+      CORR(l15_ev, CAST(hit AS INT64)), COUNT(*)
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'b_barrel',
+      SAFE_DIVIDE(SUM(CASE WHEN l15_barrel_pct >= 20 AND hit THEN 1 ELSE 0 END),
+                  NULLIF(SUM(CASE WHEN l15_barrel_pct >= 20 THEN 1 ELSE 0 END), 0)),
+      CORR(l15_barrel_pct, CAST(hit AS INT64)), COUNT(*)
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'p_iso_allowed', NULL, NULL, COUNT(*)
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'platoon', NULL, NULL, COUNT(*)
+    FROM picks, overall
+
+    UNION ALL
+    SELECT 'hot_form', NULL, NULL, COUNT(*)
+    FROM picks, overall
+    """
+    params = [
+        bigquery.ScalarQueryParameter("today", "DATE", TODAY.isoformat()),
+        bigquery.ScalarQueryParameter("days", "INT64", days),
+    ]
+
+    try:
+        rows = list(client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result())
+    except Exception as exc:
+        log.error("HR factor analysis query failed: %s", exc)
+        return
+
+    sample_size = rows[0].n if rows else 0
+    if sample_size < MIN_SAMPLE_SIZE:
+        log.info("Only %s HR results — need %s before calibrating weights", sample_size, MIN_SAMPLE_SIZE)
+        return
+
+    # Apply learning adjustments
+    new_weights = dict(current_weights)
+    weight_rows = []
+
+    for row in rows:
+        factor = row.factor
+        corr = row.corr
+        high_hr = row.high_hr
+        n = row.n
+
+        if factor not in new_weights:
+            continue
+
+        baseline = BASELINE_WEIGHTS.get(factor, new_weights[factor])
+
+        if corr is None:
+            # No correlation data — keep current weight
+            weight_rows.append({
+                "run_date": TODAY.isoformat(),
+                "factor": factor,
+                "weight": round(new_weights[factor], 3),
+                "baseline": round(baseline, 3),
+                "sample_size": n,
+                "correlation": None,
+                "hit_rate_pct": round(high_hr * 100, 1) if high_hr else None,
+                "updated_at": NOW.isoformat(),
+            })
+            continue
+
+        # Adjustment: positive correlation → boost, negative → dampen
+        adjustment = corr * LEARNING_RATE * new_weights[factor]
+        old_weight = new_weights[factor]
+        new_weight = max(WEIGHT_FLOOR, min(WEIGHT_CEILING, old_weight + adjustment))
+        new_weights[factor] = round(new_weight, 3)
+
+        log.info(
+            "  %s: corr=%.3f high_hr=%.1f%% weight %.1f → %.1f (%+.2f)",
+            factor, corr, (high_hr or 0) * 100, old_weight, new_weight, adjustment,
+        )
+
+        weight_rows.append({
+            "run_date": TODAY.isoformat(),
+            "factor": factor,
+            "weight": round(new_weight, 3),
+            "baseline": round(baseline, 3),
+            "sample_size": n,
+            "correlation": round(corr, 4) if corr is not None else None,
+            "hit_rate_pct": round(high_hr * 100, 1) if high_hr else None,
+            "updated_at": NOW.isoformat(),
+        })
+
+    # Persist factors without correlation data
+    for factor, weight in new_weights.items():
+        if not any(r["factor"] == factor for r in weight_rows):
+            weight_rows.append({
+                "run_date": TODAY.isoformat(),
+                "factor": factor,
+                "weight": round(weight, 3),
+                "baseline": round(BASELINE_WEIGHTS.get(factor, weight), 3),
+                "sample_size": sample_size,
+                "correlation": None,
+                "hit_rate_pct": None,
+                "updated_at": NOW.isoformat(),
+            })
+
+    if weight_rows:
+        errors = client.insert_rows_json(
+            f"{PROJECT}.{DATASET}.hr_model_weights", weight_rows
+        )
+        if errors:
+            log.error("BQ insert errors for hr_model_weights: %s", errors[:3])
+        else:
+            log.info("Wrote %s calibrated HR weights to hr_model_weights", len(weight_rows))
 
 
 # ── 1. Results Tracking ────────────────────────────────────────────────────
 # Join picks with actual game results from MLB Stats API
 
 def setup_results_view():
-    """Create a view that joins HR picks with actual outcomes."""
+    """Create a view over HR picks with actual outcomes (backfilled columns)."""
     sql = f"""
     CREATE OR REPLACE VIEW {TABLE}.vw_hr_pick_results` AS
     SELECT
-      p.run_date,
-      p.game_pk,
-      p.batter_id,
-      p.batter_name,
-      p.bat_side,
-      p.pitcher_id,
-      p.pitcher_name,
-      p.pitcher_hand,
-      p.score AS pulse_score,
-      p.grade,
-      p.why,
-      p.flags,
-      p.iso,
-      p.slg,
-      p.l15_ev,
-      p.l15_barrel_pct,
-      p.season_ev,
-      p.season_barrel_pct,
-      p.l15_hard_hit_pct,
-      p.hr_fb_pct,
-      p.p_hr9_vs_hand,
-      p.p_hr_fb_pct,
-      p.p_barrel_pct,
-      p.p_fb_pct,
-      p.p_hard_hit_pct,
-      p.hr_odds_best_price,
-      p.hr_odds_best_book,
-      p.weather_indicator,
-      p.game_temp,
-      p.wind_speed,
-      p.ballpark_name,
-      -- Actual result: did the batter hit a HR in this game?
-      COALESCE(r.home_runs, 0) AS actual_hr,
-      CASE WHEN COALESCE(r.home_runs, 0) >= 1 THEN TRUE ELSE FALSE END AS hr_hit,
-      r.hits AS actual_hits,
-      r.at_bats AS actual_ab,
-    FROM {TABLE}.hr_picks_daily` p
-    LEFT JOIN {TABLE}.raw_pitcher_vs_batting_order` r
-      ON p.run_date = r.run_date
-      AND p.game_pk = r.game_pk
-      AND p.batter_id = r.batter_id
+      run_date,
+      game_pk,
+      batter_id,
+      batter_name,
+      bat_side,
+      pitcher_id,
+      pitcher_name,
+      pitcher_hand,
+      score AS pulse_score,
+      grade,
+      why,
+      flags,
+      iso,
+      slg,
+      l15_ev,
+      l15_barrel_pct,
+      season_ev,
+      season_barrel_pct,
+      l15_hard_hit_pct,
+      hr_fb_pct,
+      p_hr9_vs_hand,
+      p_hr_fb_pct,
+      p_barrel_pct,
+      p_fb_pct,
+      p_hard_hit_pct,
+      hr_odds_best_price,
+      hr_odds_best_book,
+      weather_indicator,
+      game_temp,
+      wind_speed,
+      ballpark_name,
+      COALESCE(actual_hr, 0) AS actual_hr,
+      COALESCE(hit, FALSE) AS hr_hit,
+    FROM {TABLE}.hr_picks_daily`
     QUALIFY ROW_NUMBER() OVER (
-      PARTITION BY p.run_date, p.batter_id, p.pitcher_id
-      ORDER BY p.score DESC
+      PARTITION BY run_date, batter_id, pitcher_id
+      ORDER BY score DESC
     ) = 1
     """
     client.query(sql).result()
@@ -410,9 +720,16 @@ def print_report(days=30):
 # ── Main ───────────────────────────────────────────────────────────────────
 
 def main():
-    log.info("Setting up analytics views...")
+    log.info("Step 1: Backfilling HR results (last 3 days)...")
+    backfill_hr_results(days=3)
+
+    log.info("Step 2: Calibrating HR weights...")
+    calibrate_hr_weights(days=30)
+
+    log.info("Step 3: Setting up analytics views...")
     setup_all()
-    log.info("Generating report...")
+
+    log.info("Step 4: Generating report...")
     print_report(30)
 
 

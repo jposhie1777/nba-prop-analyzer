@@ -116,6 +116,40 @@ RAW_K_PROPS_SCHEMA = [
     bigquery.SchemaField("ingested_at",        "TIMESTAMP"),
 ]
 
+RAW_HIT_PROPS_SCHEMA = [
+    bigquery.SchemaField("run_date",           "DATE"),
+    bigquery.SchemaField("game_pk",            "INTEGER"),
+    bigquery.SchemaField("batter_id",          "INTEGER"),
+    bigquery.SchemaField("batter_name",        "STRING"),
+    bigquery.SchemaField("team_code",          "STRING"),
+    bigquery.SchemaField("opp_team_code",      "STRING"),
+    bigquery.SchemaField("position",           "STRING"),
+    bigquery.SchemaField("line",               "FLOAT"),
+    bigquery.SchemaField("over_under",         "STRING"),
+    bigquery.SchemaField("best_price",         "INTEGER"),
+    bigquery.SchemaField("best_book",          "STRING"),
+    bigquery.SchemaField("pf_rating",          "FLOAT"),
+    bigquery.SchemaField("matchup_value",      "FLOAT"),
+    bigquery.SchemaField("matchup_label",      "STRING"),
+    bigquery.SchemaField("hit_rate_l5",        "STRING"),
+    bigquery.SchemaField("hit_rate_l10",       "STRING"),
+    bigquery.SchemaField("hit_rate_l20",       "STRING"),
+    bigquery.SchemaField("hit_rate_season",    "STRING"),
+    bigquery.SchemaField("hit_rate_vs_team",   "STRING"),
+    bigquery.SchemaField("hit_rate_last_season","STRING"),
+    bigquery.SchemaField("avg_l10",            "FLOAT"),
+    bigquery.SchemaField("avg_home_away",      "FLOAT"),
+    bigquery.SchemaField("avg_vs_opponent",    "FLOAT"),
+    bigquery.SchemaField("streak",             "INTEGER"),
+    bigquery.SchemaField("deep_link_desktop",  "STRING"),
+    bigquery.SchemaField("deep_link_ios",      "STRING"),
+    bigquery.SchemaField("dk_event_id",        "STRING"),
+    bigquery.SchemaField("dk_outcome_code",    "STRING"),
+    bigquery.SchemaField("fd_market_id",       "STRING"),
+    bigquery.SchemaField("fd_selection_id",    "STRING"),
+    bigquery.SchemaField("ingested_at",        "TIMESTAMP"),
+]
+
 RAW_PITCHER_VS_BATTING_ORDER_SCHEMA = [
     bigquery.SchemaField("run_date",      "DATE"),
     bigquery.SchemaField("game_pk",       "INTEGER"),
@@ -275,6 +309,16 @@ def ensure_tables():
         log.info("raw_k_props table ready")
     except Exception as exc:
         log.warning("Could not create raw_k_props: %s", exc)
+
+    # raw_hit_props
+    try:
+        bq.create_table(
+            bigquery.Table(table("raw_hit_props"), schema=RAW_HIT_PROPS_SCHEMA),
+            exists_ok=True,
+        )
+        log.info("raw_hit_props table ready")
+    except Exception as exc:
+        log.warning("Could not create raw_hit_props: %s", exc)
 
     # raw_team_strikeout_rankings
     try:
@@ -726,6 +770,98 @@ async def fetch_k_props(session, game_pk):
         })
 
     log.info("Fetched K props for %s pitchers in game %s", len(rows), game_pk)
+    return rows
+
+
+async def fetch_hit_props(session, game_pk):
+    """
+    Fetch standard (non-alt) batter hits over/under props for a game.
+    Returns list of BQ-ready rows for raw_hit_props.
+    """
+    import re
+    from urllib.parse import parse_qs, urlsplit
+
+    data = await get(session, f"{BASE_URL}/mlb/props", params={"gameId": game_pk})
+    if not data or not isinstance(data, list):
+        return []
+
+    rows = []
+    for item in data:
+        if item.get("category") != "hits":
+            continue
+        if item.get("isAlternate") is not None:
+            continue
+        ou_side = (item.get("overUnder") or "").lower()
+        if ou_side not in ("over", "under"):
+            continue
+
+        best = item.get("bestMarket") or {}
+        markets = item.get("markets") if isinstance(item.get("markets"), list) else []
+        if best:
+            markets = list(markets) + [best]
+
+        # Parse DK/FD deep links from all markets
+        dk_event_id = None
+        dk_outcome_code = None
+        fd_market_id = None
+        fd_selection_id = None
+
+        for mkt in markets:
+            sb = (mkt.get("sportsbook") or "").lower()
+            desktop = (mkt.get("deepLinkDesktop") or "").strip()
+            if not desktop:
+                continue
+
+            if "draftkings" in sb and not dk_event_id:
+                split = urlsplit(desktop)
+                match = re.search(r"/event/([^/?#]+)", split.path)
+                dk_event_id = match.group(1) if match else None
+                for part in (split.query or "").split("&"):
+                    if part.startswith("outcomes="):
+                        dk_outcome_code = part.split("=", 1)[1].strip() or None
+                        break
+
+            if "fanduel" in sb and not fd_market_id:
+                split = urlsplit(desktop)
+                qs = parse_qs(split.query, keep_blank_values=False)
+                fd_market_id = (qs.get("marketId") or qs.get("marketId[0]") or qs.get("marketId[]") or [None])[0]
+                fd_selection_id = (qs.get("selectionId") or qs.get("selectionId[0]") or qs.get("selectionId[]") or [None])[0]
+
+        rows.append({
+            "run_date":             TODAY.isoformat(),
+            "game_pk":              game_pk,
+            "batter_id":            si(item.get("playerId")),
+            "batter_name":          item.get("name", ""),
+            "team_code":            item.get("teamCode", ""),
+            "opp_team_code":        item.get("opposingTeamCode", ""),
+            "position":             item.get("position", ""),
+            "line":                 sf(item.get("line")),
+            "over_under":           ou_side,
+            "best_price":           si(best.get("price")),
+            "best_book":            best.get("sportsbook", ""),
+            "pf_rating":            sf(item.get("pfRating")),
+            "matchup_value":        sf(item.get("matchupValue")),
+            "matchup_label":        item.get("matchupLabel", ""),
+            "hit_rate_l5":          item.get("hitRateL5", ""),
+            "hit_rate_l10":         item.get("hitRateL10", ""),
+            "hit_rate_l20":         item.get("hitRateL20", ""),
+            "hit_rate_season":      item.get("hitRateSeason", ""),
+            "hit_rate_vs_team":     item.get("hitRateVsTeam", ""),
+            "hit_rate_last_season": item.get("hitRateLastSeason", ""),
+            "avg_l10":              sf(item.get("avgL10")),
+            "avg_home_away":        sf(item.get("avgHomeAway")),
+            "avg_vs_opponent":      sf(item.get("avgVsOpponent")),
+            "streak":               si(item.get("streak")),
+            "deep_link_desktop":    best.get("deepLinkDesktop", ""),
+            "deep_link_ios":        best.get("deepLinkIos", ""),
+            "dk_event_id":          dk_event_id,
+            "dk_outcome_code":      dk_outcome_code,
+            "fd_market_id":         fd_market_id,
+            "fd_selection_id":      fd_selection_id,
+            "ingested_at":          NOW.isoformat(),
+        })
+
+    log.info("Fetched hit props for %s batters in game %s", len(rows), game_pk)
     return rows
 
 
@@ -1191,6 +1327,14 @@ async def main():
         for result in k_props_results:
             all_k_props_rows.extend(result)
         bq_insert("raw_k_props", all_k_props_rows)
+
+        hit_props_results = await asyncio.gather(
+            *[fetch_hit_props(session, game["game_pk"]) for game in games]
+        )
+        all_hit_props_rows = []
+        for result in hit_props_results:
+            all_hit_props_rows.extend(result)
+        bq_insert("raw_hit_props", all_hit_props_rows)
 
         # ── Step 3: build raw_game_weather rows ───────────────────────────────
         game_weather_rows = []

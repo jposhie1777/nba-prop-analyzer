@@ -176,7 +176,7 @@ def load_team_k_rankings():
 def load_game_weather():
     """Load game context (Vegas totals, ballpark)."""
     rows = query(f"""
-        SELECT game_pk, over_under, ballpark_name
+        SELECT game_pk, game_date, over_under, ballpark_name
         FROM {tbl('raw_game_weather')}
         WHERE run_date = '{TODAY}'
         QUALIFY ROW_NUMBER() OVER (PARTITION BY game_pk ORDER BY ingested_at DESC) = 1
@@ -565,10 +565,12 @@ def main():
                 side, prop, pitcher_splits, pitches, team_k, game_ctx, weights
             )
 
+            gpk = prop.get("game_pk")
             row = {
                 "run_date": TODAY.isoformat(),
                 "run_timestamp": NOW.isoformat(),
-                "game_pk": prop.get("game_pk"),
+                "game_pk": gpk,
+                "game_date": game_ctx.get(gpk, {}).get("game_date"),
                 "pitcher_id": pitcher_id,
                 "pitcher_name": prop.get("pitcher_name", ""),
                 "pitcher_hand": (pitcher_splits.get("Season", {}).get("pitcher_hand") or ""),

@@ -122,6 +122,7 @@ def fetch_top_picks():
     FROM `{HR_TABLE}`
     WHERE run_date = @run_date
       AND grade IN ('IDEAL', 'FAVORABLE')
+      AND (game_date IS NULL OR game_date > CURRENT_TIMESTAMP())
     QUALIFY ROW_NUMBER() OVER (
       PARTITION BY batter_name, pitcher_name
       ORDER BY run_timestamp DESC
@@ -262,6 +263,78 @@ def _dk_fd_links(pick):
     return " \u2022 ".join(parts)
 
 
+def _purge_channel():
+    """Delete all messages in the HR channel before sending fresh picks.
+    Uses bulk-delete (up to 100 per call, messages must be < 14 days old)."""
+    import time as _time
+
+    if not BOT_TOKEN:
+        log.warning("Cannot purge channel without bot token")
+        return
+
+    headers = {
+        "Authorization": f"Bot {BOT_TOKEN}",
+        "Content-Type": "application/json",
+        "User-Agent": "PulseSports/1.0",
+    }
+
+    total_deleted = 0
+    while True:
+        # Fetch up to 100 message IDs
+        fetch_url = f"{DISCORD_API}/channels/{CHANNEL_ID}/messages?limit=100"
+        req = Request(fetch_url, headers=headers, method="GET")
+        try:
+            with urlopen(req, timeout=10) as resp:
+                messages = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            log.error("Failed to fetch messages for purge: %s", exc)
+            break
+
+        if not messages:
+            break
+
+        msg_ids = [m["id"] for m in messages]
+
+        if len(msg_ids) == 1:
+            # Single message — use single delete
+            del_url = f"{DISCORD_API}/channels/{CHANNEL_ID}/messages/{msg_ids[0]}"
+            req = Request(del_url, headers=headers, method="DELETE")
+            try:
+                with urlopen(req, timeout=10):
+                    total_deleted += 1
+            except Exception as exc:
+                log.warning("Single delete failed: %s", exc)
+                break
+        else:
+            # Bulk delete (2-100 messages)
+            bulk_url = f"{DISCORD_API}/channels/{CHANNEL_ID}/messages/bulk-delete"
+            data = json.dumps({"messages": msg_ids}).encode("utf-8")
+            req = Request(bulk_url, data=data, headers=headers, method="POST")
+            try:
+                with urlopen(req, timeout=10):
+                    total_deleted += len(msg_ids)
+            except Exception as exc:
+                err_str = str(exc)
+                if "429" in err_str:
+                    _time.sleep(2)
+                    continue
+                log.warning("Bulk delete failed: %s — trying individual deletes", exc)
+                for mid in msg_ids:
+                    del_url = f"{DISCORD_API}/channels/{CHANNEL_ID}/messages/{mid}"
+                    req = Request(del_url, headers=headers, method="DELETE")
+                    try:
+                        with urlopen(req, timeout=10):
+                            total_deleted += 1
+                    except Exception:
+                        pass
+                    _time.sleep(0.3)
+                break
+
+        _time.sleep(1)  # respect rate limits between batches
+
+    log.info("Purged %s messages from HR channel", total_deleted)
+
+
 def _send_discord(payload):
     """Send a message to Discord. Uses bot token if available, webhook as fallback."""
     import time as _time
@@ -349,6 +422,9 @@ def send_picks_to_discord(picks):
 
     if not picks:
         return
+
+    # Clear old messages so channel only shows today's picks
+    _purge_channel()
 
     ideal_count = sum(1 for p in picks if p.get("grade") == "IDEAL")
     fav_count = sum(1 for p in picks if p.get("grade") == "FAVORABLE")

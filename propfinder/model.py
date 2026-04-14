@@ -360,6 +360,7 @@ def load_game_weather():
             f"""
             SELECT
                 game_pk,
+                game_date,
                 home_team_id,
                 away_team_id,
                 weather_indicator,
@@ -502,6 +503,41 @@ def fetch_bvp_stats(batter_id, pitcher_id):
     except Exception as exc:
         log.debug("BvP fetch failed for %s vs %s: %s", batter_id, pitcher_id, exc)
     return {"bvp_ab": None, "bvp_hits": None, "bvp_hr": None}
+
+
+def load_learned_weights():
+    """Load the most recent learned weights from hr_model_weights.
+    Returns a dict of factor → multiplier (learned_weight / baseline_weight).
+    Multiplier > 1.0 means factor is more predictive than baseline assumed.
+    Multiplier < 1.0 means factor is less predictive."""
+    BASELINE = {
+        "p_hr9_vs_hand": 20.0, "p_hr_fb_pct": 18.0, "p_fb_pct": 8.0,
+        "p_barrel_pct": 7.0, "p_hard_hit_pct": 5.0, "p_iso_allowed": 4.0,
+        "platoon": 3.0, "b_iso": 15.0, "b_slg": 15.0, "b_ev": 15.0,
+        "b_barrel": 15.0, "hot_form": 4.0,
+    }
+    try:
+        rows = query(f"""
+            SELECT factor, weight
+            FROM {tbl('hr_model_weights')}
+            WHERE run_date = (
+                SELECT MAX(run_date) FROM {tbl('hr_model_weights')}
+            )
+        """)
+        if rows:
+            weights = {r["factor"]: r["weight"] for r in rows}
+            # Convert absolute weights to multipliers vs baseline
+            multipliers = {}
+            for factor, learned in weights.items():
+                baseline = BASELINE.get(factor, learned)
+                multipliers[factor] = learned / baseline if baseline > 0 else 1.0
+            log.info("Loaded %s learned HR weights (multipliers: %s)",
+                     len(multipliers),
+                     {k: f"{v:.2f}" for k, v in sorted(multipliers.items())})
+            return multipliers
+    except Exception as exc:
+        log.warning("Could not load learned HR weights: %s", exc)
+    return None
 
 
 def load_bvp_bulk(matchups):
@@ -679,10 +715,17 @@ def compute_pitcher_metrics(pitcher_id, bat_side, matchup_splits):
     }
 
 
-def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
+def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw, learned_weights=None):
+    """Score a batter/pitcher matchup. If learned_weights is provided (dict of
+    factor → multiplier), scale each factor's raw contribution accordingly."""
     raw = 0.0
     flags_good = []
     flags_bad = []
+    w = learned_weights or {}
+
+    def _w(factor, pts):
+        """Apply learned weight multiplier to raw points."""
+        return pts * w.get(factor, 1.0)
 
     hand_char_val = hc(pitcher_hand_raw)
     hitter_hand = "LHB" if bat_side == "L" else "RHB"
@@ -692,26 +735,26 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
 
     # Pitcher (max 65 points).
     if hr9 >= P_HR9_IDEAL:
-        raw += 20
+        raw += _w("p_hr9_vs_hand", 20)
         flags_good.append(f"HR/9 vs {hitter_hand}: {hr9:.2f} (elite target)")
     elif hr9 >= P_HR9_FAV:
-        raw += 15
+        raw += _w("p_hr9_vs_hand", 15)
         flags_good.append(f"HR/9 vs {hitter_hand}: {hr9:.2f} (favorable)")
     elif hr9 >= P_HR9_AVG:
-        raw += 8
+        raw += _w("p_hr9_vs_hand", 8)
         flags_good.append(f"HR/9 vs {hitter_hand}: {hr9:.2f} (average)")
     elif hr9 < P_HR9_AVOID:
         raw -= 3
         flags_bad.append(f"HR/9 vs {hitter_hand}: {hr9:.2f} (avoid)")
 
     if hrfb >= P_HRFB_IDEAL:
-        raw += 18
+        raw += _w("p_hr_fb_pct", 18)
         flags_good.append(f"HR/FB% vs {hitter_hand}: {hrfb:.1f}% (elite target)")
     elif hrfb >= P_HRFB_FAV:
-        raw += 12
+        raw += _w("p_hr_fb_pct", 12)
         flags_good.append(f"HR/FB% vs {hitter_hand}: {hrfb:.1f}% (favorable)")
     elif hrfb >= P_HRFB_AVG:
-        raw += 5
+        raw += _w("p_hr_fb_pct", 5)
         flags_good.append(f"HR/FB% vs {hitter_hand}: {hrfb:.1f}% (average)")
     else:
         raw -= 1
@@ -719,33 +762,33 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
 
     fb = pm["p_fb_pct"]
     if fb > P_FB_IDEAL:
-        raw += 8
+        raw += _w("p_fb_pct", 8)
         flags_good.append(f"FB%: {fb:.1f}%")
     elif fb >= P_FB_FAV:
-        raw += 4
+        raw += _w("p_fb_pct", 4)
         flags_good.append(f"FB%: {fb:.1f}%")
 
     if pm["p_barrel_pct"] > P_BARREL_ELITE:
-        raw += 7
+        raw += _w("p_barrel_pct", 7)
         flags_good.append(f"Barrel% allowed: {pm['p_barrel_pct']:.1f}%")
     elif pm["p_barrel_pct"] >= 7:
-        raw += 3
+        raw += _w("p_barrel_pct", 3)
         flags_good.append(f"Barrel% allowed: {pm['p_barrel_pct']:.1f}%")
 
     if pm["p_hard_hit_pct"] >= P_HARDHIT_ATTACK:
-        raw += 5
+        raw += _w("p_hard_hit_pct", 5)
         flags_good.append(f"HardHit% allowed: {pm['p_hard_hit_pct']:.1f}%")
     elif pm["p_hard_hit_pct"] >= 35:
-        raw += 2
+        raw += _w("p_hard_hit_pct", 2)
 
     if pm["p_iso_allowed"] >= P_ISO_EXPLOIT:
-        raw += 4
+        raw += _w("p_iso_allowed", 4)
         flags_good.append(f"ISO allowed: {pm['p_iso_allowed']:.3f}")
     elif pm["p_iso_allowed"] >= 0.160:
-        raw += 2
+        raw += _w("p_iso_allowed", 2)
 
     if bat_side == hand_char_val:
-        raw += 3
+        raw += _w("platoon", 3)
         flags_good.append(f"{hitter_hand} platoon edge")
 
     # Batter (max 60 points).
@@ -755,7 +798,10 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
     barrel_tier = tier(bm["l15_barrel_pct"], B_BAR_ELITE, B_BAR_FAV, B_BAR_AVG)
 
     points = {"elite": 15, "favorable": 10, "average": 5, "below": 0}
-    raw += points[iso_tier] + points[slg_tier] + points[ev_tier] + points[barrel_tier]
+    raw += _w("b_iso", points[iso_tier])
+    raw += _w("b_slg", points[slg_tier])
+    raw += _w("b_ev", points[ev_tier])
+    raw += _w("b_barrel", points[barrel_tier])
 
     if iso_tier == "below":
         raw -= 1
@@ -783,7 +829,7 @@ def compute_pulse_score(bm, pm, bat_side, pitcher_hand_raw):
     if bm["l15_hard_hit_pct"] >= 50:
         hot_form_bonus += 3
     if hot_form_bonus > 0:
-        raw += hot_form_bonus
+        raw += _w("hot_form", hot_form_bonus)
         flags_good.append(f"Hot-form bonus +{hot_form_bonus}")
 
     pulse = round(max(0.0, min(100.0, (raw / RAW_MAX) * 100)), 1)
@@ -864,6 +910,11 @@ def main():
     bvp_map = load_bvp_bulk(matchups)
     batting_pos_map = load_batting_positions()
     pvbo_map = load_pitcher_vs_batting_order()
+    learned_weights = load_learned_weights()
+    if learned_weights:
+        log.info("Using learned HR weights for scoring")
+    else:
+        log.info("No learned HR weights found — using baseline scoring")
 
     if not matchups:
         log.warning("No matchup data - did ingest run with the updated ingest.py?")
@@ -902,6 +953,7 @@ def main():
             pitcher_metrics,
             matchup["bat_side"],
             matchup["pitcher_hand"],
+            learned_weights=learned_weights,
         )
         why = build_why(
             matchup["batter_name"],
@@ -936,6 +988,7 @@ def main():
                 "run_date": TODAY.isoformat(),
                 "run_timestamp": NOW.isoformat(),
                 "game_pk": matchup["game_pk"],
+                "game_date": gw.get("game_date"),
                 "home_team": TEAM_ABBREV.get(home_tid, "") or prop_ctx.get("home_team") or "",
                 "away_team": TEAM_ABBREV.get(away_tid, "") or prop_ctx.get("away_team") or "",
                 "batter_id": matchup["batter_id"],

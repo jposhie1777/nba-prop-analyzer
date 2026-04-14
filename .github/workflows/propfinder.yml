@@ -1,14 +1,13 @@
-name: PropFinder HR Pipeline
+name: PropFinder Pipeline (HR + K + Hits)
 
 on:
   schedule:
     # All times in UTC. ET = UTC-4 (EDT) / UTC-5 (EST)
-    # 6:00 AM ET  = 10:00 UTC (EDT) / 11:00 UTC (EST)
-    # 12:00 PM ET = 16:00 UTC (EDT) / 17:00 UTC (EST)
-    # 4:30 PM ET  = 20:30 UTC (EDT) / 21:30 UTC (EST)
-    - cron: "0 10 * * *"    # 6:00 AM ET (EDT)
-    - cron: "0 16 * * *"    # 12:00 PM ET (EDT)
-    - cron: "30 20 * * *"   # 4:30 PM ET (EDT)
+    - cron: "0 10 * * *"    # 6:00 AM ET
+    - cron: "30 15 * * *"   # 11:30 AM ET
+    - cron: "0 19 * * *"    # 3:00 PM ET
+    - cron: "30 20 * * *"   # 4:30 PM ET
+    - cron: "0 22 * * *"    # 6:00 PM ET
   workflow_dispatch:         # manual trigger from GitHub UI
 
 jobs:
@@ -50,7 +49,11 @@ jobs:
 
       - name: Run PropFinder workflow
         env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_HR_WEBHOOK: ${{ secrets.DISCORD_HR_WEBHOOK }}
+          DISCORD_HR_CHANNEL_ID: ${{ secrets.DISCORD_HR_CHANNEL_ID }}
+          DISCORD_K_CHANNEL_ID: ${{ secrets.DISCORD_K_CHANNEL_ID }}
+          DISCORD_HIT_CHANNEL_ID: ${{ secrets.DISCORD_HIT_CHANNEL_ID }}
         run: |
           python propfinder/run_workflow.py 2>&1 | tee propfinder/workflow.log
 

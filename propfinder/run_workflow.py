@@ -78,26 +78,46 @@ def _acquire_lock(lock_file: Path, on_lock: str) -> Tuple[int, object | None]:
     return 0, handle
 
 
-def _steps(args: argparse.Namespace) -> Iterable[Tuple[str, str]]:
+def _shared_steps(args: argparse.Namespace) -> Iterable[Tuple[str, str]]:
+    """Steps that must succeed before any pipeline runs."""
     if args.setup:
         yield "setup_bq", "setup_bq.py"
     if not args.skip_ingest:
         yield "ingest", "ingest.py"
+
+
+def _hr_pipeline(args: argparse.Namespace) -> Iterable[Tuple[str, str]]:
+    """HR pipeline steps."""
+    if not args.skip_analytics:
+        yield "hr_calibrate", "analytics.py"
     if not args.skip_model:
         yield "model", "model.py"
     if not args.skip_alerts:
         yield "discord_alerts", "discord_alerts.py"
-    if not args.skip_analytics:
-        yield "analytics", "analytics.py"
-    # K prop pipeline
+
+
+def _k_pipeline(args: argparse.Namespace) -> Iterable[Tuple[str, str]]:
+    """K (strikeout) pipeline steps."""
     if not args.skip_fd_k_scraper:
         yield "fd_k_scraper", "fd_k_scraper.py"
+    # K learning loop: backfill results + calibrate weights BEFORE model
+    # so today's scoring uses yesterday's learnings.
+    if not args.skip_k_analytics:
+        yield "k_calibrate", "k_analytics.py"
     if not args.skip_k_model:
         yield "k_model", "k_model.py"
     if not args.skip_k_alerts:
         yield "k_discord_alerts", "k_discord_alerts.py"
-    if not args.skip_k_analytics:
-        yield "k_analytics", "k_analytics.py"
+
+
+def _hit_pipeline(args: argparse.Namespace) -> Iterable[Tuple[str, str]]:
+    """Hit (batter hits) pipeline steps."""
+    if not args.skip_hit_analytics:
+        yield "hit_calibrate", "hit_analytics.py"
+    if not args.skip_hit_model:
+        yield "hit_model", "hit_model.py"
+    if not args.skip_hit_alerts:
+        yield "hit_discord_alerts", "hit_discord_alerts.py"
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
@@ -148,6 +168,21 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         help="Skip k_analytics.py.",
     )
     parser.add_argument(
+        "--skip-hit-model",
+        action="store_true",
+        help="Skip hit_model.py (batter hits scoring).",
+    )
+    parser.add_argument(
+        "--skip-hit-alerts",
+        action="store_true",
+        help="Skip hit_discord_alerts.py.",
+    )
+    parser.add_argument(
+        "--skip-hit-analytics",
+        action="store_true",
+        help="Skip hit_analytics.py (hit learning loop).",
+    )
+    parser.add_argument(
         "--lock-file",
         default=os.getenv("PROPFINDER_LOCK_FILE", "/tmp/propfinder_workflow.lock"),
         help="Path for lock file used to avoid overlapping runs.",
@@ -173,12 +208,29 @@ def main(argv: List[str] | None = None) -> int:
         return lock_status
 
     started = time.time()
+    any_failure = 0
     try:
-        for step_name, script_name in _steps(args):
+        # Shared steps (setup + ingest) must succeed before pipelines
+        for step_name, script_name in _shared_steps(args):
             code = _run_step(step_name, script_name)
             if code != 0:
-                _log("PropFinder workflow failed")
+                _log("PropFinder workflow failed during shared steps")
                 return code
+
+        # Run each pipeline independently — one failing doesn't block others
+        pipelines: List[Tuple[str, Iterable[Tuple[str, str]]]] = [
+            ("HR",  _hr_pipeline(args)),
+            ("K",   _k_pipeline(args)),
+            ("Hit", _hit_pipeline(args)),
+        ]
+        for pipe_name, steps in pipelines:
+            _log(f"--- {pipe_name} pipeline ---")
+            for step_name, script_name in steps:
+                code = _run_step(step_name, script_name)
+                if code != 0:
+                    _log(f"{pipe_name} pipeline failed at {step_name} — skipping rest of {pipe_name}")
+                    any_failure = code
+                    break
     finally:
         try:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
@@ -186,8 +238,12 @@ def main(argv: List[str] | None = None) -> int:
             lock_handle.close()
         _log(f"LOCK released: {lock_path}")
 
-    _log(f"PropFinder workflow complete in {time.time() - started:.1f}s")
-    return 0
+    elapsed = time.time() - started
+    if any_failure:
+        _log(f"PropFinder workflow complete with errors in {elapsed:.1f}s")
+    else:
+        _log(f"PropFinder workflow complete in {elapsed:.1f}s")
+    return any_failure
 
 
 if __name__ == "__main__":

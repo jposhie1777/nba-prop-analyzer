@@ -26,6 +26,10 @@ WEBHOOK_URL = os.getenv(
     "https://discord.com/api/webhooks/1493226751936036924/iwUUMtAA5GMmpdF1QBl45JnIYunAzF0UrfD_bdHxJSxf4KDb8Q8hfRuh-JsI2Ll0prJ2",
 )
 
+BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
+K_CHANNEL_ID = os.getenv("DISCORD_K_CHANNEL_ID", "1493224034752659517")
+DISCORD_API = "https://discord.com/api/v10"
+
 ET = ZoneInfo("America/New_York")
 TODAY = datetime.now(ET).date()
 
@@ -62,6 +66,7 @@ def fetch_top_k_picks():
     FROM `{K_TABLE}`
     WHERE run_date = @run_date
       AND grade IN ('FIRE', 'STRONG', 'LEAN')
+      AND (game_date IS NULL OR game_date > CURRENT_TIMESTAMP())
     QUALIFY ROW_NUMBER() OVER (
         PARTITION BY pitcher_id, side
         ORDER BY score DESC
@@ -188,6 +193,74 @@ def build_embeds(picks):
     return embeds
 
 
+def _purge_k_channel():
+    """Delete all messages in the K channel before sending fresh picks."""
+    import time as _time
+
+    if not BOT_TOKEN or not K_CHANNEL_ID:
+        log.info("Skipping K channel purge (need BOT_TOKEN + K_CHANNEL_ID)")
+        return
+
+    headers = {
+        "Authorization": f"Bot {BOT_TOKEN}",
+        "Content-Type": "application/json",
+        "User-Agent": "PulseSports/1.0",
+    }
+
+    total_deleted = 0
+    while True:
+        fetch_url = f"{DISCORD_API}/channels/{K_CHANNEL_ID}/messages?limit=100"
+        req = Request(fetch_url, headers=headers, method="GET")
+        try:
+            with urlopen(req, timeout=10) as resp:
+                messages = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            log.error("Failed to fetch K channel messages for purge: %s", exc)
+            break
+
+        if not messages:
+            break
+
+        msg_ids = [m["id"] for m in messages]
+
+        if len(msg_ids) == 1:
+            del_url = f"{DISCORD_API}/channels/{K_CHANNEL_ID}/messages/{msg_ids[0]}"
+            req = Request(del_url, headers=headers, method="DELETE")
+            try:
+                with urlopen(req, timeout=10):
+                    total_deleted += 1
+            except Exception as exc:
+                log.warning("Single delete failed: %s", exc)
+                break
+        else:
+            bulk_url = f"{DISCORD_API}/channels/{K_CHANNEL_ID}/messages/bulk-delete"
+            data = json.dumps({"messages": msg_ids}).encode("utf-8")
+            req = Request(bulk_url, data=data, headers=headers, method="POST")
+            try:
+                with urlopen(req, timeout=10):
+                    total_deleted += len(msg_ids)
+            except Exception as exc:
+                err_str = str(exc)
+                if "429" in err_str:
+                    _time.sleep(2)
+                    continue
+                log.warning("Bulk delete failed: %s — trying individual deletes", exc)
+                for mid in msg_ids:
+                    del_url = f"{DISCORD_API}/channels/{K_CHANNEL_ID}/messages/{mid}"
+                    req = Request(del_url, headers=headers, method="DELETE")
+                    try:
+                        with urlopen(req, timeout=10):
+                            total_deleted += 1
+                    except Exception:
+                        pass
+                    _time.sleep(0.3)
+                break
+
+        _time.sleep(1)
+
+    log.info("Purged %s messages from K channel", total_deleted)
+
+
 def send_to_discord(embeds):
     """Send embeds to Discord webhook."""
     if not WEBHOOK_URL:
@@ -227,6 +300,7 @@ def main():
         log.info("No actionable K picks today \u2014 skipping Discord alert")
         return
 
+    _purge_k_channel()
     embeds = build_embeds(picks)
     send_to_discord(embeds)
     log.info("Discord K alerts sent to #strikeouts")

@@ -25,14 +25,12 @@ DATASET = "propfinder"
 HR_TABLE = f"{PROJECT}.{DATASET}.hr_picks_daily"
 
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
-CHANNEL_ID = os.getenv("DISCORD_HR_CHANNEL_ID", "1493058403990507622")
+CHANNEL_ID = os.getenv("DISCORD_HR_CHANNEL_ID") or "1493058403990507622"
 DISCORD_API = "https://discord.com/api/v10"
 
 # Fallback webhook (used if bot token not available)
-WEBHOOK_URL = os.getenv(
-    "DISCORD_HR_WEBHOOK",
-    "https://discord.com/api/webhooks/1493058679153623060/hEI1Eqxbdc2MyDFG-dAaAgoqMk46J11M9EKzM3ZJkSj-cZJZWvwSE1RM5u0MxlUMmZnD",
-)
+WEBHOOK_URL = os.getenv("DISCORD_HR_WEBHOOK") or \
+    "https://discord.com/api/webhooks/1493058679153623060/hEI1Eqxbdc2MyDFG-dAaAgoqMk46J11M9EKzM3ZJkSj-cZJZWvwSE1RM5u0MxlUMmZnD"
 
 ET = ZoneInfo("America/New_York")
 TODAY = datetime.now(ET).date()

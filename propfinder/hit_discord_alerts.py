@@ -24,7 +24,7 @@ DATASET = "propfinder"
 HIT_TABLE = f"{PROJECT}.{DATASET}.hit_picks_daily"
 
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
-HIT_CHANNEL_ID = os.getenv("DISCORD_HIT_CHANNEL_ID", "1493361988338974882")
+HIT_CHANNEL_ID = os.getenv("DISCORD_HIT_CHANNEL_ID") or "1493361988338974882"
 DISCORD_API = "https://discord.com/api/v10"
 
 ET = ZoneInfo("America/New_York")

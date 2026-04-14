@@ -21,13 +21,11 @@ PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", "graphite-flare-477419-h7")
 DATASET = "propfinder"
 K_TABLE = f"{PROJECT}.{DATASET}.k_picks_daily"
 
-WEBHOOK_URL = os.getenv(
-    "DISCORD_K_WEBHOOK",
-    "https://discord.com/api/webhooks/1493226751936036924/iwUUMtAA5GMmpdF1QBl45JnIYunAzF0UrfD_bdHxJSxf4KDb8Q8hfRuh-JsI2Ll0prJ2",
-)
+WEBHOOK_URL = os.getenv("DISCORD_K_WEBHOOK") or \
+    "https://discord.com/api/webhooks/1493226751936036924/iwUUMtAA5GMmpdF1QBl45JnIYunAzF0UrfD_bdHxJSxf4KDb8Q8hfRuh-JsI2Ll0prJ2"
 
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
-K_CHANNEL_ID = os.getenv("DISCORD_K_CHANNEL_ID", "1493224034752659517")
+K_CHANNEL_ID = os.getenv("DISCORD_K_CHANNEL_ID") or "1493224034752659517"
 DISCORD_API = "https://discord.com/api/v10"
 
 ET = ZoneInfo("America/New_York")

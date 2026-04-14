@@ -438,10 +438,31 @@ def extract_position_abbr(player):
 
 # ── BQ insert ─────────────────────────────────────────────────────────────────
 
+# Tables where we should delete today's data before re-inserting to avoid duplicates.
+# These tables are fully refreshed each ingest run.
+_DEDUP_TABLES = {
+    "raw_hit_data", "raw_splits", "raw_pitcher_matchup", "raw_pitch_log",
+    "raw_pitcher_vs_batting_order", "raw_statcast_batter_pitch_stats",
+}
+
+def _delete_today(table_name):
+    """Delete today's rows from a table before re-inserting."""
+    fqn = f"{PROJECT}.{DATASET}.{table_name}"
+    sql = f"DELETE FROM `{fqn}` WHERE run_date = '{TODAY.isoformat()}'"
+    try:
+        job = bq.query(sql)
+        job.result()
+        log.info("Cleared today's rows from %s (%s rows deleted)", table_name, job.num_dml_affected_rows)
+    except Exception as exc:
+        log.warning("Could not clear %s: %s", table_name, exc)
+
+
 def bq_insert(table_name, rows):
     if not rows:
         log.info("No rows for %s", table_name)
         return
+    if table_name in _DEDUP_TABLES:
+        _delete_today(table_name)
     table_ref = table(table_name)
     total = len(rows)
     inserted = 0

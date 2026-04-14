@@ -145,11 +145,18 @@ def load_hit_props():
 
 
 def load_hit_data():
-    """Load raw_hit_data for computing contact metrics."""
+    """Load raw_hit_data for computing contact metrics (deduplicated)."""
     rows = query(f"""
-        SELECT *
-        FROM {tbl('raw_hit_data')}
-        WHERE run_date = '{TODAY}'
+        SELECT * FROM (
+            SELECT *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY batter_id, event_date, pitch_type, CAST(launch_speed AS STRING), CAST(launch_angle AS STRING)
+                    ORDER BY ingested_at DESC
+                ) AS _rn
+            FROM {tbl('raw_hit_data')}
+            WHERE run_date = '{TODAY}'
+        )
+        WHERE _rn = 1
         ORDER BY batter_id, event_date DESC
     """)
     out = defaultdict(list)
@@ -185,14 +192,15 @@ def load_pitcher_matchups():
 
 
 def load_pitch_log():
-    """Load pitch arsenal — whiff rates per pitch (low whiff = more contact)."""
+    """Load pitch arsenal — whiff rates per pitch (low whiff = more contact).
+    Prefer 2026 data, fall back to 2025 for pitchers with limited current data."""
     rows = query(f"""
         SELECT pitcher_id, batter_hand, pitch_name, percentage, whiff, k_percent, woba, slg
         FROM {tbl('raw_pitch_log')}
-        WHERE run_date = '{TODAY}' AND season = {TODAY.year}
+        WHERE run_date = '{TODAY}' AND season >= 2025
         QUALIFY ROW_NUMBER() OVER (
             PARTITION BY pitcher_id, batter_hand, pitch_name
-            ORDER BY percentage DESC
+            ORDER BY season DESC
         ) = 1
     """)
     out = defaultdict(list)

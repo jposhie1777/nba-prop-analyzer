@@ -298,9 +298,16 @@ def hc(pitcher_hand):
 def load_hit_data():
     rows = query(
         f"""
-        SELECT *
-        FROM {tbl('raw_hit_data')}
-        WHERE run_date = '{TODAY}'
+        SELECT * FROM (
+            SELECT *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY batter_id, event_date, pitch_type, CAST(launch_speed AS STRING), CAST(launch_angle AS STRING)
+                    ORDER BY ingested_at DESC
+                ) AS _rn
+            FROM {tbl('raw_hit_data')}
+            WHERE run_date = '{TODAY}'
+        )
+        WHERE _rn = 1
         ORDER BY batter_id, event_date DESC
         """
     )
@@ -341,9 +348,16 @@ def load_pitcher_matchup():
 def load_pitch_log():
     rows = query(
         f"""
-        SELECT *
-        FROM {tbl('raw_pitch_log')}
-        WHERE run_date = '{TODAY}' AND season = 2025
+        SELECT * FROM (
+            SELECT *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY pitcher_id, batter_hand, pitch_name
+                    ORDER BY season DESC
+                ) AS _rn
+            FROM {tbl('raw_pitch_log')}
+            WHERE run_date = '{TODAY}' AND season >= 2025
+        )
+        WHERE _rn = 1
         ORDER BY pitcher_id, percentage DESC
         """
     )

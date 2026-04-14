@@ -120,10 +120,10 @@ WOBA_VULNERABLE = 0.340
 WOBA_HITTABLE = 0.310
 WOBA_AVG = 0.290
 
-# Grade thresholds
-GRADE_FIRE = 80
-GRADE_STRONG = 65
-GRADE_LEAN = 50
+# Grade thresholds (relaxed for early season — tighten once calibration has data)
+GRADE_FIRE = 68
+GRADE_STRONG = 52
+GRADE_LEAN = 38
 
 
 # ── Data loaders ─────────────────────────────────────────────────────────

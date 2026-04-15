@@ -482,9 +482,20 @@ async def send_alerts():
             bt = p.get("batter_team") or ""
             score = int(p.get("score") or 0)
             odds = _fmt_odds(p.get("hr_odds_best_price"))
+            barrel = p.get("l15_barrel_pct")
+            iso = p.get("iso")
+            ev = p.get("l15_ev")
+            stats = []
+            if barrel is not None:
+                stats.append(f"Brl {barrel:.0f}%")
+            if iso is not None:
+                stats.append(f"ISO {iso:.3f}")
+            if ev is not None:
+                stats.append(f"EV {ev:.1f}")
+            stat_str = f" | {' '.join(stats)}" if stats else ""
             lines.append(
                 f"{ws} **{batter}** ({bat}) {bt} vs {pitcher} ({phand}) "
-                f"\u2022 Pulse **{score}** \u2022 {odds}"
+                f"\u2022 Pulse **{score}** \u2022 {odds}{stat_str}"
             )
 
         # Discord embeds max 4096 chars — split into batches

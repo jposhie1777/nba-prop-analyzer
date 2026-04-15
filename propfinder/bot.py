@@ -409,6 +409,150 @@ async def clear_cmd(interaction: discord.Interaction):
     await interaction.response.send_message("\U0001f5d1\ufe0f Parlay cart cleared.", ephemeral=True)
 
 
+# ── Text-based parlay builder ────────────────────────────────────────────
+
+def _normalize(name: str) -> str:
+    """Lowercase, strip, collapse whitespace."""
+    return " ".join(name.lower().split())
+
+
+def _match_player(query: str, picks: dict[str, dict]) -> tuple[str | None, dict | None]:
+    """Fuzzy-match a player name against the pick store.
+    Tries exact, then last-name, then substring match.
+    Returns (pick_id, pick_data) or (None, None).
+    """
+    q = _normalize(query)
+    if not q:
+        return None, None
+
+    # Pass 1: exact full-name match
+    for pid, p in picks.items():
+        if _normalize(p.get("batter_name", "")) == q:
+            return pid, p
+
+    # Pass 2: last-name match
+    q_last = q.split()[-1]
+    matches = []
+    for pid, p in picks.items():
+        batter = _normalize(p.get("batter_name", ""))
+        if batter.split()[-1] == q_last:
+            matches.append((pid, p))
+    if len(matches) == 1:
+        return matches[0]
+
+    # Pass 3: substring
+    for pid, p in picks.items():
+        if q in _normalize(p.get("batter_name", "")):
+            return pid, p
+
+    return None, None
+
+
+def _parse_parlay_message(content: str):
+    """Parse 'player1, player2, player3 -fanduel' into (names, book).
+    Returns (list[str], book_key) where book_key is 'dk' or 'fd'.
+    """
+    text = content.strip()
+
+    # Detect book flag at end
+    book = None
+    for flag, key in [
+        ("-fanduel", "fd"), ("-fd", "fd"),
+        ("-draftkings", "dk"), ("-dk", "dk"),
+        ("-fanatics", "dk"),  # Fanatics uses DK codes
+    ]:
+        if text.lower().endswith(flag):
+            book = key
+            text = text[:len(text) - len(flag)].strip().rstrip(",").strip()
+            break
+
+    if not book:
+        return [], None
+
+    # Split names by comma
+    names = [n.strip() for n in text.split(",") if n.strip()]
+    return names, book
+
+
+@bot.event
+async def on_message(message: discord.Message):
+    # Ignore bot's own messages
+    if message.author == bot.user:
+        return
+
+    # Only respond in the HR channel
+    if message.channel.id != CHANNEL_ID:
+        return
+
+    # Check if the message looks like a parlay request (has a book flag)
+    names, book = _parse_parlay_message(message.content)
+    if not names or not book:
+        return
+
+    book_label = "FanDuel" if book == "fd" else "DraftKings"
+
+    # Need picks in store
+    if not pick_store:
+        await message.reply(
+            "\u26a0\ufe0f No picks loaded yet today. Wait for alerts to post first.",
+            mention_author=False,
+        )
+        return
+
+    # Match each player
+    matched = []
+    not_found = []
+    for name in names:
+        pid, pick = _match_player(name, pick_store)
+        if pick:
+            matched.append((pid, pick))
+        else:
+            not_found.append(name)
+
+    if not matched:
+        await message.reply(
+            f"\u274c Couldn't find any of those players in today's picks.\n"
+            f"Available: {', '.join(p.get('batter_name', '?') for p in pick_store.values())}",
+            mention_author=False,
+        )
+        return
+
+    # Build parlay link
+    picks_list = [p for _, p in matched]
+    if book == "fd":
+        link = _build_fd_parlay(picks_list)
+    else:
+        link = _build_dk_parlay(picks_list)
+
+    # Build legs display
+    legs = []
+    for pid, p in matched:
+        odds = _fmt_odds(p.get("hr_odds_best_price"))
+        batter = p.get("batter_name", "?")
+        legs.append(f"\u2022 **{batter}** 1+ HR ({odds})")
+
+    combined = _parlay_odds(picks_list)
+    desc = "\n".join(legs)
+
+    if not_found:
+        desc += f"\n\n\u26a0\ufe0f Not found: {', '.join(not_found)}"
+
+    if link:
+        desc += f"\n\n**Combined Odds: {combined or '?'}**"
+        desc += f"\n\n[**Open {book_label} Betslip \u2192**]({link})"
+    else:
+        desc += f"\n\n\u26a0\ufe0f Missing {book_label} deeplink data for one or more players"
+
+    emoji_ref = "<:fd:1493070566809403593>" if book == "fd" else "<:dk:1493069919766708295>"
+    embed = discord.Embed(
+        title=f"{emoji_ref} {book_label} Parlay \u2014 {len(matched)} legs",
+        description=desc,
+        color=0x1A6CFF if book == "fd" else 0x22C55E,
+    )
+
+    await message.reply(embed=embed, mention_author=False)
+
+
 # ── Send Alerts ────────────────────────────────────────────────────────────
 
 async def send_alerts():

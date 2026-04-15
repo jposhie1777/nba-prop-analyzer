@@ -1,8 +1,8 @@
 """
-bot.py — Discord bot for HR pick alerts with interactive parlay building.
+bot.py — Discord bot for HR pick alerts with text-based parlay building.
 
-Users tap DK/FD buttons on individual picks to add them to a personal
-parlay cart, then use /parlay to generate a combined deeplink.
+Users type player names + book in #hr-bets to build parlays:
+  aaron judge, shohei ohtani, mike trout -fanduel
 """
 
 import asyncio
@@ -14,7 +14,6 @@ from zoneinfo import ZoneInfo
 from urllib.parse import quote
 
 import discord
-from discord import app_commands
 from google.cloud import bigquery
 
 log = logging.getLogger(__name__)
@@ -23,17 +22,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 # ── Config ──────────────────────────────────────────────────────────────────
 TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 CHANNEL_ID = int(os.getenv("DISCORD_HR_CHANNEL_ID", "1493058403990507622"))
-GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "1460293607847231633"))
 
 PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", "graphite-flare-477419-h7")
 DATASET = "propfinder"
 HR_TABLE = f"{PROJECT}.{DATASET}.hr_picks_daily"
 
 ET = ZoneInfo("America/New_York")
-
-# Custom emoji IDs
-DK_EMOJI = discord.PartialEmoji(name="dk", id=1493069919766708295)
-FD_EMOJI = discord.PartialEmoji(name="fd", id=1493070566809403593)
 
 GRADE_COLORS = {"IDEAL": 0x22C55E, "FAVORABLE": 0xF59E0B}
 GRADE_EMOJI = {"IDEAL": "\U0001f7e2", "FAVORABLE": "\U0001f7e1"}
@@ -124,40 +118,21 @@ def _stats_line(p):
 import json as _json
 from pathlib import Path as _Path
 
-_CART_FILE = _Path("/tmp/parlay_carts.json")
 _PICK_FILE = _Path("/tmp/pick_store.json")
 
 # pick_id -> pick data (populated when alerts are sent)
 pick_store: dict[str, dict] = {}
 
-# user_id -> {"dk": {pick_id: pick_data}, "fd": {pick_id: pick_data}}
-user_carts: dict[int, dict[str, dict[str, dict]]] = {}
-
 
 def _load_state():
-    """Load carts and picks from disk on startup."""
-    global user_carts, pick_store
-    try:
-        if _CART_FILE.exists():
-            data = _json.loads(_CART_FILE.read_text())
-            user_carts.update({int(k): v for k, v in data.items()})
-            log.info("Loaded %s carts from disk", len(user_carts))
-    except Exception as e:
-        log.warning("Failed to load carts: %s", e)
+    """Load picks from disk on startup."""
+    global pick_store
     try:
         if _PICK_FILE.exists():
             pick_store.update(_json.loads(_PICK_FILE.read_text()))
             log.info("Loaded %s picks from disk", len(pick_store))
     except Exception as e:
         log.warning("Failed to load picks: %s", e)
-
-
-def _save_carts():
-    """Persist carts to disk."""
-    try:
-        _CART_FILE.write_text(_json.dumps({str(k): v for k, v in user_carts.items()}))
-    except Exception:
-        pass
 
 
 def _save_picks():
@@ -238,175 +213,16 @@ def _parlay_odds(picks):
         return str(int(round(-100 / (combined - 1))))
 
 
-# ── Pick Button View ───────────────────────────────────────────────────────
-
-class PickView(discord.ui.View):
-    def __init__(self, pick_id: str):
-        super().__init__(timeout=None)
-        self.pick_id = pick_id
-
-        dk_btn = discord.ui.Button(
-            emoji=DK_EMOJI,
-            label="DK",
-            style=discord.ButtonStyle.secondary,
-            custom_id=f"dk:{pick_id}",
-        )
-        dk_btn.callback = self.dk_callback
-        self.add_item(dk_btn)
-
-        fd_btn = discord.ui.Button(
-            emoji=FD_EMOJI,
-            label="FD",
-            style=discord.ButtonStyle.secondary,
-            custom_id=f"fd:{pick_id}",
-        )
-        fd_btn.callback = self.fd_callback
-        self.add_item(fd_btn)
-
-    async def dk_callback(self, interaction: discord.Interaction):
-        await self._toggle(interaction, "dk")
-
-    async def fd_callback(self, interaction: discord.Interaction):
-        await self._toggle(interaction, "fd")
-
-    async def _toggle(self, interaction: discord.Interaction, book: str):
-        uid = interaction.user.id
-        pick = pick_store.get(self.pick_id)
-        if not pick:
-            await interaction.response.send_message("Pick no longer available.", ephemeral=True)
-            return
-
-        cart = user_carts.setdefault(uid, {"dk": {}, "fd": {}})
-        book_cart = cart[book]
-        batter = pick.get("batter_name", "?")
-        book_label = "DraftKings" if book == "dk" else "FanDuel"
-
-        if self.pick_id in book_cart:
-            del book_cart[self.pick_id]
-            _save_carts()
-            count = len(book_cart)
-            await interaction.response.send_message(
-                f"\u274c Removed **{batter}** from {book_label} parlay ({count} leg{'s' if count != 1 else ''})",
-                ephemeral=True,
-            )
-        else:
-            book_cart[self.pick_id] = pick
-            _save_carts()
-            count = len(book_cart)
-            await interaction.response.send_message(
-                f"\u2705 Added **{batter}** to {book_label} parlay ({count} leg{'s' if count != 1 else ''})",
-                ephemeral=True,
-            )
-
-
 # ── Bot Setup ──────────────────────────────────────────────────────────────
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = discord.Client(intents=intents)
-tree = app_commands.CommandTree(bot)
 
 
 @bot.event
 async def on_ready():
     log.info(f"Bot ready: {bot.user}")
-    try:
-        guild = discord.Object(id=GUILD_ID)
-        tree.copy_global_to(guild=guild)
-        await tree.sync(guild=guild)
-        log.info("Slash commands synced")
-    except Exception as e:
-        log.error(f"Failed to sync commands: {e}")
-
-
-@bot.event
-async def on_interaction(interaction: discord.Interaction):
-    """Handle DK/FD button clicks from ANY message (bot-sent or discord_alerts.py-sent)."""
-    if interaction.type != discord.InteractionType.component:
-        return
-    custom_id = interaction.data.get("custom_id", "")
-    if not (custom_id.startswith("dk:") or custom_id.startswith("fd:")):
-        return
-
-    book, pick_id = custom_id.split(":", 1)
-    uid = interaction.user.id
-    book_label = "DraftKings" if book == "dk" else "FanDuel"
-
-    # Try pick_store first; if not there, build minimal pick from the embed
-    pick = pick_store.get(pick_id)
-    if not pick:
-        batter_name = pick_id.rsplit("_", 1)[0] if "_" in pick_id else pick_id
-        pick = {"batter_name": batter_name, "game_pk": pick_id.rsplit("_", 1)[-1] if "_" in pick_id else ""}
-        pick_store[pick_id] = pick
-        _save_picks()
-
-    cart = user_carts.setdefault(uid, {"dk": {}, "fd": {}})
-    book_cart = cart[book]
-    batter = pick.get("batter_name", "?")
-
-    if pick_id in book_cart:
-        del book_cart[pick_id]
-        _save_carts()
-        count = len(book_cart)
-        await interaction.response.send_message(
-            f"\u274c Removed **{batter}** from {book_label} parlay ({count} leg{'s' if count != 1 else ''})",
-            ephemeral=True,
-        )
-    else:
-        book_cart[pick_id] = pick
-        _save_carts()
-        count = len(book_cart)
-        await interaction.response.send_message(
-            f"\u2705 Added **{batter}** to {book_label} parlay ({count} leg{'s' if count != 1 else ''})",
-            ephemeral=True,
-        )
-
-
-@tree.command(name="parlay", description="Generate your parlay deeplink from selected picks")
-async def parlay_cmd(interaction: discord.Interaction):
-    uid = interaction.user.id
-    cart = user_carts.get(uid)
-    if not cart or (not cart.get("dk") and not cart.get("fd")):
-        await interaction.response.send_message(
-            "Your parlay cart is empty. Tap the <:dk:1493069919766708295> or <:fd:1493070566809403593> buttons on picks to add them.",
-            ephemeral=True,
-        )
-        return
-
-    embeds = []
-
-    for book, label, builder, emoji_ref in [
-        ("dk", "DraftKings", _build_dk_parlay, "<:dk:1493069919766708295>"),
-        ("fd", "FanDuel", _build_fd_parlay, "<:fd:1493070566809403593>"),
-    ]:
-        picks = list(cart.get(book, {}).values())
-        if not picks:
-            continue
-
-        legs = []
-        for p in picks:
-            odds = _fmt_odds(p.get("hr_odds_best_price"))
-            legs.append(f"\u2022 **{p.get('batter_name', '?')}** 1+ HR ({odds})")
-
-        combined = _parlay_odds(picks)
-        link = builder(picks)
-        link_text = f"\n\n[**Open {label} Betslip \u2192**]({link})" if link else "\n\n\u26a0\ufe0f Missing deeplink data"
-
-        embeds.append(discord.Embed(
-            title=f"{emoji_ref} {label} Parlay \u2014 {len(picks)} legs",
-            description="\n".join(legs) + f"\n\n**Combined Odds: {combined or '?'}**" + link_text,
-            color=0x22C55E if book == "dk" else 0x1A6CFF,
-        ))
-
-    await interaction.response.send_message(embeds=embeds, ephemeral=True)
-
-
-@tree.command(name="clear", description="Clear your parlay cart")
-async def clear_cmd(interaction: discord.Interaction):
-    uid = interaction.user.id
-    user_carts.pop(uid, None)
-    _save_carts()
-    await interaction.response.send_message("\U0001f5d1\ufe0f Parlay cart cleared.", ephemeral=True)
 
 
 # ── Text-based parlay builder ────────────────────────────────────────────
@@ -596,9 +412,8 @@ async def send_alerts():
         log.info("No IDEAL/FAVORABLE picks today")
         return
 
-    # Clear old pick store and carts
+    # Clear old pick store
     pick_store.clear()
-    user_carts.clear()
 
     # Send header
     ideal_count = sum(1 for p in picks if p.get("grade") == "IDEAL")
@@ -606,7 +421,8 @@ async def send_alerts():
     await channel.send(
         f"# \u26be HR Picks \u2014 {today.strftime('%b %d, %Y')}\n"
         f"**{ideal_count}** IDEAL + **{fav_count}** FAVORABLE matchups\n"
-        f"Tap <:dk:1493069919766708295> or <:fd:1493070566809403593> to build your parlay, then `/parlay` to get your deeplink."
+        f"Type player names + book to build a parlay:\n"
+        f"`judge, ohtani, trout -fanduel`"
     )
 
     def _is_ws(p):
@@ -634,7 +450,7 @@ async def send_alerts():
     async def _send_pick(p, color):
         pick_id = f"{p.get('batter_name','?')}_{p.get('game_pk','')}"
         pick_store[pick_id] = dict(p)
-        await channel.send(embed=_bot_embed(p, color), view=PickView(pick_id))
+        await channel.send(embed=_bot_embed(p, color))
 
     # ALL IDEAL picks
     ideal_picks = [p for p in picks if p.get("grade") == "IDEAL"]
@@ -654,7 +470,6 @@ async def send_alerts():
             await _send_pick(p, GRADE_COLORS["FAVORABLE"])
 
     _save_picks()
-    _save_carts()
     log.info(f"Sent {len(pick_store)} pick alerts to #{channel.name}")
 
 

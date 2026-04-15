@@ -124,7 +124,7 @@ def load_k_props():
         FROM {tbl('raw_k_props')}
         WHERE run_date = '{TODAY}'
         QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY pitcher_id, over_under, line
+            PARTITION BY pitcher_id, over_under, CAST(line AS STRING)
             ORDER BY ingested_at DESC
         ) = 1
     """)

@@ -459,15 +459,54 @@ async def send_alerts():
         for p in ideal_picks:
             await _send_pick(p, GRADE_COLORS["IDEAL"])
 
-    # Top 10 FAVORABLE — weak spots sorted first, then by score
+    # FAVORABLE — compact format, batched into embeds (all of them)
     fav_picks = [p for p in picks if p.get("grade") == "FAVORABLE"]
     fav_picks.sort(key=lambda p: (_is_ws(p), p.get("score") or 0), reverse=True)
-    fav_top = fav_picks[:10]
 
-    if fav_top:
-        await channel.send(f"## \U0001f7e1 FAVORABLE Matchups (top {len(fav_top)})")
-        for p in fav_top:
-            await _send_pick(p, GRADE_COLORS["FAVORABLE"])
+    if fav_picks:
+        # Store picks for parlay matching
+        for p in fav_picks:
+            pick_id = f"{p.get('batter_name','?')}_{p.get('game_pk','')}"
+            pick_store[pick_id] = dict(p)
+
+        await channel.send(f"## \U0001f7e1 FAVORABLE Matchups ({len(fav_picks)})")
+
+        # Build compact lines — one per player
+        lines = []
+        for p in fav_picks:
+            ws = "\U0001f3af" if _is_ws(p) else ""
+            batter = p.get("batter_name", "?")
+            bat = _hand_label(p.get("bat_side"))
+            pitcher = p.get("pitcher_name", "?")
+            phand = _pitcher_hand(p.get("pitcher_hand"))
+            bt = p.get("batter_team") or ""
+            score = int(p.get("score") or 0)
+            odds = _fmt_odds(p.get("hr_odds_best_price"))
+            lines.append(
+                f"{ws} **{batter}** ({bat}) {bt} vs {pitcher} ({phand}) "
+                f"\u2022 Pulse **{score}** \u2022 {odds}"
+            )
+
+        # Discord embeds max 4096 chars — split into batches
+        batches = []
+        current = []
+        length = 0
+        for line in lines:
+            if length + len(line) + 1 > 3900:
+                batches.append(current)
+                current = []
+                length = 0
+            current.append(line)
+            length += len(line) + 1
+        if current:
+            batches.append(current)
+
+        for batch in batches:
+            embed = discord.Embed(
+                description="\n".join(batch),
+                color=GRADE_COLORS["FAVORABLE"],
+            )
+            await channel.send(embed=embed)
 
     _save_picks()
     log.info(f"Sent {len(pick_store)} pick alerts to #{channel.name}")

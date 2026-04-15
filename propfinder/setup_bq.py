@@ -486,6 +486,48 @@ for tbl_name in ["hr_picks_daily", "k_picks_daily", "hit_picks_daily"]:
     except Exception as exc:
         print(f"Could not update {tbl_name} schema: {exc}")
 
+# ── Add alternate-line + FD columns to raw_k_props (idempotent) ──────────
+K_PROPS_NEW_FIELDS = [
+    bigquery.SchemaField("is_alternate",    "BOOLEAN"),
+    bigquery.SchemaField("fd_market_id",    "STRING"),
+    bigquery.SchemaField("fd_selection_id", "STRING"),
+]
+try:
+    kp_tbl = client.get_table(f"{PROJECT}.{DATASET}.raw_k_props")
+    kp_existing = {f.name for f in kp_tbl.schema}
+    kp_new = [f for f in K_PROPS_NEW_FIELDS if f.name not in kp_existing]
+    if kp_new:
+        kp_tbl.schema = list(kp_tbl.schema) + kp_new
+        client.update_table(kp_tbl, ["schema"])
+        print(f"Added {len(kp_new)} columns to raw_k_props: {[f.name for f in kp_new]}")
+    else:
+        print("raw_k_props already has alternate/FD columns")
+except Exception as exc:
+    print(f"Could not update raw_k_props schema: {exc}")
+
+# ── Add best-line + FD columns to k_picks_daily (idempotent) ─────────────
+K_PICKS_NEW_FIELDS = [
+    bigquery.SchemaField("expected_k",        "FLOAT"),
+    bigquery.SchemaField("recommended_line",  "FLOAT"),
+    bigquery.SchemaField("recommended_side",  "STRING"),
+    bigquery.SchemaField("is_best_line",      "BOOLEAN"),
+    bigquery.SchemaField("all_lines_json",    "STRING"),
+    bigquery.SchemaField("fd_market_id",      "STRING"),
+    bigquery.SchemaField("fd_selection_id",   "STRING"),
+]
+try:
+    kpd_tbl = client.get_table(f"{PROJECT}.{DATASET}.k_picks_daily")
+    kpd_existing = {f.name for f in kpd_tbl.schema}
+    kpd_new = [f for f in K_PICKS_NEW_FIELDS if f.name not in kpd_existing]
+    if kpd_new:
+        kpd_tbl.schema = list(kpd_tbl.schema) + kpd_new
+        client.update_table(kpd_tbl, ["schema"])
+        print(f"Added {len(kpd_new)} columns to k_picks_daily: {[f.name for f in kpd_new]}")
+    else:
+        print("k_picks_daily already has best-line/FD columns")
+except Exception as exc:
+    print(f"Could not update k_picks_daily schema: {exc}")
+
 # ── hr_league_outcomes — ALL batters league-wide with pre-game stats + HR result
 client.create_table(bigquery.Table(
     f"{PROJECT}.{DATASET}.hr_league_outcomes",
@@ -521,5 +563,76 @@ client.create_table(bigquery.Table(
     ]
 ), exists_ok=True)
 print("Created hr_league_outcomes")
+
+# ── k_league_outcomes — ALL starting pitchers league-wide with pre-game stats + K result
+client.create_table(bigquery.Table(
+    f"{PROJECT}.{DATASET}.k_league_outcomes",
+    schema=[
+        bigquery.SchemaField("game_date",          "DATE"),
+        bigquery.SchemaField("game_pk",             "INTEGER"),
+        bigquery.SchemaField("pitcher_id",          "INTEGER"),
+        bigquery.SchemaField("pitcher_name",        "STRING"),
+        bigquery.SchemaField("pitcher_hand",        "STRING"),
+        bigquery.SchemaField("team_code",           "STRING"),
+        bigquery.SchemaField("opp_team_code",       "STRING"),
+        # Pitcher pre-game K factors (from raw tables snapshot on game_date)
+        bigquery.SchemaField("k_per_9",             "FLOAT"),
+        bigquery.SchemaField("k_pct",               "FLOAT"),
+        bigquery.SchemaField("strike_pct",          "FLOAT"),
+        bigquery.SchemaField("whip",                "FLOAT"),
+        bigquery.SchemaField("arsenal_whiff_avg",   "FLOAT"),
+        bigquery.SchemaField("num_high_whiff_pitches", "INTEGER"),
+        bigquery.SchemaField("opp_team_k_rank",     "INTEGER"),
+        bigquery.SchemaField("ip",                  "FLOAT"),
+        # Outcome
+        bigquery.SchemaField("actual_k",            "INTEGER"),
+        bigquery.SchemaField("line",                "FLOAT"),
+        bigquery.SchemaField("hit_over",            "BOOLEAN"),
+        bigquery.SchemaField("hit_under",           "BOOLEAN"),
+        # Whether our model picked this pitcher that day
+        bigquery.SchemaField("was_picked",          "BOOLEAN"),
+        bigquery.SchemaField("pulse_score",         "FLOAT"),
+        bigquery.SchemaField("grade",               "STRING"),
+        bigquery.SchemaField("pick_side",           "STRING"),
+        bigquery.SchemaField("collected_at",        "TIMESTAMP"),
+    ]
+), exists_ok=True)
+print("Created k_league_outcomes")
+
+# ── hit_league_outcomes — ALL batters league-wide with pre-game stats + hit result
+client.create_table(bigquery.Table(
+    f"{PROJECT}.{DATASET}.hit_league_outcomes",
+    schema=[
+        bigquery.SchemaField("game_date",          "DATE"),
+        bigquery.SchemaField("game_pk",             "INTEGER"),
+        bigquery.SchemaField("batter_id",           "INTEGER"),
+        bigquery.SchemaField("batter_name",         "STRING"),
+        bigquery.SchemaField("bat_side",            "STRING"),
+        bigquery.SchemaField("pitcher_id",          "INTEGER"),
+        bigquery.SchemaField("pitcher_name",        "STRING"),
+        bigquery.SchemaField("pitcher_hand",        "STRING"),
+        # Batter pre-game contact factors
+        bigquery.SchemaField("batting_avg_vs_hand", "FLOAT"),
+        bigquery.SchemaField("contact_rate",        "FLOAT"),
+        bigquery.SchemaField("l15_hit_rate",        "FLOAT"),
+        bigquery.SchemaField("hard_hit_pct",        "FLOAT"),
+        bigquery.SchemaField("line_drive_pct",      "FLOAT"),
+        # Pitcher pre-game vulnerability factors
+        bigquery.SchemaField("p_whip",              "FLOAT"),
+        bigquery.SchemaField("p_k_rate",            "FLOAT"),
+        bigquery.SchemaField("p_woba_allowed",      "FLOAT"),
+        bigquery.SchemaField("p_hard_hit_allowed",  "FLOAT"),
+        bigquery.SchemaField("p_hits_per_9",        "FLOAT"),
+        # Outcome
+        bigquery.SchemaField("actual_hits",         "INTEGER"),
+        bigquery.SchemaField("hit",                 "BOOLEAN"),
+        # Whether our model picked this batter that day
+        bigquery.SchemaField("was_picked",          "BOOLEAN"),
+        bigquery.SchemaField("pulse_score",         "FLOAT"),
+        bigquery.SchemaField("grade",               "STRING"),
+        bigquery.SchemaField("collected_at",        "TIMESTAMP"),
+    ]
+), exists_ok=True)
+print("Created hit_league_outcomes")
 
 print("\nAll tables created successfully.")

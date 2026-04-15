@@ -114,21 +114,27 @@ GRADE_LEAN = 50
 # ── Data loaders ─────────────────────────────────────────────────────────
 
 def load_k_props():
-    """Load today's K props (over + under) from raw_k_props."""
+    """Load today's K props (standard + alternate, over + under) from raw_k_props.
+    Returns (all_props, main_props):
+      - all_props: {pitcher_id: [list of all prop rows]}
+      - main_props: {pitcher_id: {over: row, under: row}} (main lines for PF signal inheritance)
+    """
     rows = query(f"""
         SELECT *
         FROM {tbl('raw_k_props')}
         WHERE run_date = '{TODAY}'
         QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY pitcher_id, over_under
+            PARTITION BY pitcher_id, over_under, line
             ORDER BY ingested_at DESC
         ) = 1
     """)
-    # Group by pitcher_id → {over: row, under: row}
-    out = defaultdict(dict)
+    all_props = defaultdict(list)
+    main_props = defaultdict(dict)
     for r in rows:
-        out[r["pitcher_id"]][r["over_under"]] = r
-    return out
+        all_props[r["pitcher_id"]].append(r)
+        if not r.get("is_alternate"):
+            main_props[r["pitcher_id"]][r["over_under"]] = r
+    return all_props, main_props
 
 
 def load_pitcher_matchups():
@@ -249,11 +255,52 @@ def compute_arsenal_metrics(pitches):
     return round(avg_whiff, 1), round(avg_kpct, 1), high_whiff_count
 
 
-def score_k_prop(side, prop, pitcher_splits, pitches, team_k, game_ctx, weights):
+def compute_expected_k(pitcher_splits, pitches, team_k, opp_code, game_ctx, game_pk):
+    """Estimate expected strikeout count for this pitcher in this game.
+    Uses K/9, estimated IP, opponent K vulnerability, and game pace."""
+    season = pitcher_splits.get("Season", {})
+    k9 = sf(season.get("strikeouts_per_9"))
+    ip = sf(season.get("ip"))
+    bf = si(season.get("batters_faced"))
+
+    # Estimate expected innings: season avg per start, capped at 7, default 5.5
+    if ip > 0 and bf > 0:
+        # Rough games estimate: ~25 BF per game start
+        est_starts = max(bf / 25, 1)
+        expected_ip = min(ip / est_starts, 7.0)
+    else:
+        expected_ip = 5.5
+
+    if k9 <= 0:
+        return 0.0
+
+    base_k = (k9 / 9.0) * expected_ip
+
+    # Opponent K vulnerability adjustment: rank 1 = most Ks, 30 = fewest
+    tk = team_k.get(opp_code, {})
+    opp_rank = si(tk.get("rank"), default=15)
+    opp_factor = 1.0 + (15 - opp_rank) * 0.01  # ±15% max
+
+    # Game pace adjustment from Vegas total
+    gw = game_ctx.get(game_pk, {})
+    vegas = sf(gw.get("over_under"))
+    pace_factor = 1.0 + (vegas - 8.5) * 0.02 if vegas > 0 else 1.0
+
+    return round(base_k * opp_factor * pace_factor, 1)
+
+
+def score_k_prop(side, prop, pitcher_splits, pitches, team_k, game_ctx, weights, main_prop=None):
     """
     Score a single K prop (over or under).
+    For alternate lines missing PF signals, inherits from main_prop.
     Returns (score, grade, why, flags, metrics_dict).
     """
+    # Inherit PF signals from main line for alternates
+    if prop.get("is_alternate") and main_prop:
+        for key in ("pf_rating", "hit_rate_l10", "hit_rate_season", "hit_rate_vs_team",
+                     "avg_l10", "avg_home_away", "avg_vs_opponent", "streak"):
+            if not prop.get(key):
+                prop[key] = main_prop.get(key)
     w = weights
     raw = 0.0
     flags_good = []
@@ -534,7 +581,7 @@ def score_k_prop(side, prop, pitcher_splits, pitches, team_k, game_ctx, weights)
 def main():
     log.info("Starting K Pulse Score model for %s", TODAY)
 
-    k_props = load_k_props()
+    all_props, main_props = load_k_props()
     pitcher_map = load_pitcher_matchups()
     pitch_log_map = load_pitch_log()
     team_k = load_team_k_rankings()
@@ -545,27 +592,66 @@ def main():
     weights = learned if learned else BASELINE_WEIGHTS
     log.info("Using %s weights", "learned" if learned else "baseline")
 
-    if not k_props:
+    if not all_props:
         log.warning("No K props found for today — did ingest run?")
         return
 
-    log.info("Processing K props for %s pitchers", len(k_props))
+    total_lines = sum(len(v) for v in all_props.values())
+    log.info("Processing %s K lines for %s pitchers", total_lines, len(all_props))
 
     output_rows = []
-    for pitcher_id, sides in k_props.items():
+    for pitcher_id, prop_rows in all_props.items():
         pitcher_splits = pitcher_map.get(pitcher_id, {})
         pitches = pitch_log_map.get(pitcher_id, [])
+        pitcher_mains = main_props.get(pitcher_id, {})
 
-        for side in ("over", "under"):
-            prop = sides.get(side)
-            if not prop:
-                continue
+        # Get opp_code and game_pk from any prop row
+        sample_prop = prop_rows[0]
+        opp_code = sample_prop.get("opp_team_code", "")
+        gpk = sample_prop.get("game_pk")
 
+        # Compute expected K count for this pitcher
+        expected_k = compute_expected_k(
+            pitcher_splits, pitches, team_k, opp_code, game_ctx, gpk
+        )
+
+        # Score every line for this pitcher
+        scored_lines = []
+        for prop in prop_rows:
+            side = prop.get("over_under", "over")
+            main_prop = pitcher_mains.get(side)
             score, grade, why, flags, metrics = score_k_prop(
-                side, prop, pitcher_splits, pitches, team_k, game_ctx, weights
+                side, prop, pitcher_splits, pitches, team_k, game_ctx, weights, main_prop
             )
+            scored_lines.append({
+                "prop": prop,
+                "side": side,
+                "score": score,
+                "grade": grade,
+                "why": why,
+                "flags": flags,
+                "metrics": metrics,
+            })
 
-            gpk = prop.get("game_pk")
+        # Sort by score to find best line
+        scored_lines.sort(key=lambda x: x["score"], reverse=True)
+        best = scored_lines[0] if scored_lines else None
+
+        # Build all_lines summary JSON
+        all_lines = [{
+            "line": sf(sl["prop"].get("line")),
+            "side": sl["side"].upper(),
+            "score": sl["score"],
+            "grade": sl["grade"],
+            "odds": si(sl["prop"].get("best_price")),
+            "fd_market_id": sl["prop"].get("fd_market_id", ""),
+            "fd_selection_id": sl["prop"].get("fd_selection_id", ""),
+        } for sl in scored_lines]
+
+        # Emit one output row per scored line, mark best
+        for sl in scored_lines:
+            prop = sl["prop"]
+            is_best = (best is not None and prop is best["prop"])
             row = {
                 "run_date": TODAY.isoformat(),
                 "run_timestamp": NOW.isoformat(),
@@ -577,7 +663,7 @@ def main():
                 "team_code": prop.get("team_code", ""),
                 "opp_team_code": prop.get("opp_team_code", ""),
                 "line": sf(prop.get("line")),
-                "side": side.upper(),
+                "side": sl["side"].upper(),
                 "best_price": si(prop.get("best_price")),
                 "best_book": prop.get("best_book", ""),
                 "deep_link_desktop": prop.get("deep_link_desktop", ""),
@@ -590,16 +676,25 @@ def main():
                 "hit_rate_season": prop.get("hit_rate_season", ""),
                 "hit_rate_vs_team": prop.get("hit_rate_vs_team", ""),
                 "streak": si(prop.get("streak")),
-                **metrics,
-                "score": score,
-                "grade": grade,
-                "why": why,
-                "flags": flags,
+                **sl["metrics"],
+                "score": sl["score"],
+                "grade": sl["grade"],
+                "why": sl["why"],
+                "flags": sl["flags"],
+                # New best-line fields
+                "expected_k": expected_k,
+                "recommended_line": sf(best["prop"].get("line")) if best else None,
+                "recommended_side": best["side"].upper() if best else None,
+                "is_best_line": is_best,
+                "all_lines_json": json.dumps(all_lines),
+                "fd_market_id": prop.get("fd_market_id", ""),
+                "fd_selection_id": prop.get("fd_selection_id", ""),
             }
             output_rows.append(row)
 
     output_rows.sort(key=lambda r: r["score"], reverse=True)
-    log.info("Scored %s K props", len(output_rows))
+    best_lines = [r for r in output_rows if r.get("is_best_line")]
+    log.info("Scored %s K lines (%s best-line picks)", len(output_rows), len(best_lines))
 
     if output_rows:
         errors = bq.insert_rows_json(f"{PROJECT}.{DATASET}.k_picks_daily", output_rows)
@@ -608,12 +703,13 @@ def main():
         else:
             log.info("Wrote %s K picks to k_picks_daily", len(output_rows))
 
-    # Print summary
+    # Print summary — show best line per pitcher
     print(f"\n{'='*70}")
     print(f"K PULSE SCORE — {TODAY}")
     print(f"{'='*70}")
+
     for label in ["FIRE", "STRONG", "LEAN", "SKIP"]:
-        group = [r for r in output_rows if r["grade"] == label]
+        group = [r for r in best_lines if r["grade"] == label]
         if not group:
             continue
         print(f"\n-- {label} --")
@@ -625,16 +721,15 @@ def main():
                 f"K-Pulse: {r['score']:.0f}  ({r['best_price']:+d} {r['best_book']})"
             )
             print(
-                f"    K/9:{r['k_per_9']:.1f}  K%:{r['k_pct']:.0f}%  "
-                f"Whiff:{r['arsenal_whiff_avg']:.0f}%  "
-                f"OppK#{r['opp_team_k_rank'] or '?'}  "
-                f"L10:{r['avg_l10']:.1f}"
+                f"    Projected: {r['expected_k']:.1f} Ks  |  K/9:{r['k_per_9']:.1f}  "
+                f"K%:{r['k_pct']:.0f}%  Whiff:{r['arsenal_whiff_avg']:.0f}%  "
+                f"OppK#{r['opp_team_k_rank'] or '?'}  L10:{r['avg_l10']:.1f}"
             )
             if r["why"]:
                 print(f"    {r['why'][:120]}")
 
-    skip_count = sum(1 for r in output_rows if r["grade"] == "SKIP")
-    print(f"\n-- SKIP: {skip_count} props did not meet criteria --")
+    skip_count = sum(1 for r in best_lines if r["grade"] == "SKIP")
+    print(f"\n-- SKIP: {skip_count} pitchers did not meet criteria --")
 
 
 if __name__ == "__main__":

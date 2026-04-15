@@ -138,7 +138,10 @@ def fetch_fd_k_markets(event_id: str, state: str = "nj"):
                 # Standard O/U: type ends with TOTAL_STRIKEOUTS
                 # e.g. PITCHER_C_TOTAL_STRIKEOUTS, PITCHER_E_TOTAL_STRIKEOUTS
                 if "TOTAL_STRIKEOUTS" in mtype:
-                    markets_found[mid] = market
+                    markets_found[mid] = (market, False)
+                # Alt K markets: contains STRIKEOUTS but NOT TOTAL_STRIKEOUTS
+                elif "STRIKEOUTS" in mtype and "TOTAL" not in mtype:
+                    markets_found[mid] = (market, True)
         except Exception as exc:
             log.debug("Tab %s failed for event %s: %s", tab, event_id, exc)
             continue
@@ -152,7 +155,7 @@ def fetch_fd_k_markets(event_id: str, state: str = "nj"):
 
     # Parse runners (over/under) from each market
     results = []
-    for market_id, market in markets_found.items():
+    for market_id, (market, is_alt) in markets_found.items():
         runners = market.get("runners", [])
         market_name = market.get("marketName", "")
 
@@ -197,6 +200,7 @@ def fetch_fd_k_markets(event_id: str, state: str = "nj"):
                 "selection_id": str(sel_id) if sel_id else "",
                 "deep_link": fd_link,
                 "market_name": market_name,
+                "is_alternate": is_alt,
             })
 
     return results
@@ -310,6 +314,9 @@ def main():
                 "streak": None,
                 "deep_link_desktop": m["deep_link"],
                 "deep_link_ios": "",
+                "is_alternate": m.get("is_alternate", False),
+                "fd_market_id": m["market_id"],
+                "fd_selection_id": m["selection_id"],
                 "ingested_at": NOW.isoformat(),
             }
             all_rows.append(row)
@@ -319,7 +326,9 @@ def main():
     # Separate overs and unders for logging
     overs = [r for r in all_rows if r["over_under"] == "over"]
     unders = [r for r in all_rows if r["over_under"] == "under"]
-    log.info("Scraped %s overs + %s unders = %s total K props", len(overs), len(unders), len(all_rows))
+    alts = [r for r in all_rows if r.get("is_alternate")]
+    log.info("Scraped %s overs + %s unders (%s alt) = %s total K props",
+             len(overs), len(unders), len(alts), len(all_rows))
 
     if args.dry_run:
         for r in all_rows:

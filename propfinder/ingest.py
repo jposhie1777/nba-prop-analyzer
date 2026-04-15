@@ -113,6 +113,9 @@ RAW_K_PROPS_SCHEMA = [
     bigquery.SchemaField("streak",             "INTEGER"),
     bigquery.SchemaField("deep_link_desktop",  "STRING"),
     bigquery.SchemaField("deep_link_ios",      "STRING"),
+    bigquery.SchemaField("is_alternate",       "BOOLEAN"),
+    bigquery.SchemaField("fd_market_id",       "STRING"),
+    bigquery.SchemaField("fd_selection_id",    "STRING"),
     bigquery.SchemaField("ingested_at",        "TIMESTAMP"),
 ]
 
@@ -748,9 +751,12 @@ async def fetch_props(session, game_pk):
 
 async def fetch_k_props(session, game_pk):
     """
-    Fetch standard (non-alt) pitcher strikeout over/under props for a game.
+    Fetch ALL pitcher strikeout over/under props (standard + alternate) for a game.
     Returns list of BQ-ready rows for raw_k_props.
     """
+    import re as _re
+    from urllib.parse import parse_qs, urlsplit
+
     data = await get(session, f"{BASE_URL}/mlb/props", params={"gameId": game_pk})
     if not data or not isinstance(data, list):
         return []
@@ -759,13 +765,29 @@ async def fetch_k_props(session, game_pk):
     for item in data:
         if item.get("category") != "pitching_strikeouts":
             continue
-        if item.get("isAlternate") is not None:
-            continue
         ou_side = (item.get("overUnder") or "").lower()
         if ou_side not in ("over", "under"):
             continue
 
         best = item.get("bestMarket") or {}
+        markets = item.get("markets") if isinstance(item.get("markets"), list) else []
+        if best:
+            markets = list(markets) + [best]
+
+        # Parse FD market/selection IDs from deep links
+        fd_market_id = None
+        fd_selection_id = None
+        for mkt in markets:
+            sb = (mkt.get("sportsbook") or "").lower()
+            desktop = (mkt.get("deepLinkDesktop") or "").strip()
+            if not desktop:
+                continue
+            if "fanduel" in sb and not fd_market_id:
+                split = urlsplit(desktop)
+                qs = parse_qs(split.query, keep_blank_values=False)
+                fd_market_id = (qs.get("marketId") or qs.get("marketId[0]") or qs.get("marketId[]") or [None])[0]
+                fd_selection_id = (qs.get("selectionId") or qs.get("selectionId[0]") or qs.get("selectionId[]") or [None])[0]
+
         rows.append({
             "run_date":          TODAY.isoformat(),
             "game_pk":           game_pk,
@@ -787,10 +809,15 @@ async def fetch_k_props(session, game_pk):
             "streak":            si(item.get("streak")),
             "deep_link_desktop": best.get("deepLinkDesktop", ""),
             "deep_link_ios":     best.get("deepLinkIos", ""),
+            "is_alternate":      item.get("isAlternate") is not None,
+            "fd_market_id":      fd_market_id or "",
+            "fd_selection_id":   fd_selection_id or "",
             "ingested_at":       NOW.isoformat(),
         })
 
-    log.info("Fetched K props for %s pitchers in game %s", len(rows), game_pk)
+    main_count = sum(1 for r in rows if not r["is_alternate"])
+    alt_count = sum(1 for r in rows if r["is_alternate"])
+    log.info("Fetched K props for game %s: %s main + %s alt lines", game_pk, main_count, alt_count)
     return rows
 
 

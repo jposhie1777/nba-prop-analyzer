@@ -57,7 +57,7 @@ def _fmt_odds(val):
 
 
 def fetch_top_k_picks():
-    """Fetch today's FIRE, STRONG, and LEAN K picks."""
+    """Fetch today's FIRE, STRONG, and LEAN K picks — best line per pitcher."""
     client = bigquery.Client(project=PROJECT)
     query = f"""
     SELECT *
@@ -65,8 +65,9 @@ def fetch_top_k_picks():
     WHERE run_date = @run_date
       AND grade IN ('FIRE', 'STRONG', 'LEAN')
       AND (game_date IS NULL OR game_date > CURRENT_TIMESTAMP())
+      AND (is_best_line = TRUE OR is_best_line IS NULL)
     QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY pitcher_id, side
+        PARTITION BY pitcher_id
         ORDER BY score DESC
     ) = 1
     ORDER BY score DESC
@@ -88,6 +89,7 @@ def _build_pick_line(p):
     score = int(p.get("score") or 0)
     odds = _fmt_odds(p.get("best_price"))
     book = p.get("best_book", "")
+    expected_k = p.get("expected_k") or 0
 
     k9 = p.get("k_per_9") or 0
     k_pct = p.get("k_pct") or 0
@@ -97,14 +99,27 @@ def _build_pick_line(p):
 
     opp_str = f"#{opp_rank}" if opp_rank else "?"
 
-    # Build deeplink
+    # Build FD direct bet link from market/selection IDs
+    fd_mid = p.get("fd_market_id")
+    fd_sid = p.get("fd_selection_id")
+    if fd_mid and fd_sid:
+        fd_link = f"https://sportsbook.fanduel.com/addToBetslip?marketId[0]={fd_mid}&selectionId[0]={fd_sid}"
+        bet_part = f" \u2022 [Bet on FanDuel]({fd_link})"
+    else:
+        bet_part = ""
+
+    # Build odds link (fallback to deep_link_desktop)
     desktop_link = p.get("deep_link_desktop")
     odds_part = f"[{odds} {book}]({desktop_link})" if desktop_link else f"{odds} {book}"
 
+    # Show projected Ks
+    proj_part = f"Projected **{expected_k:.1f} Ks**" if expected_k > 0 else ""
+
     return (
         f"{side_em} {grade_em} **{pitcher}** ({team} vs {opp}) \u2014 **{side} {line:.1f}**\n"
-        f"> K-Pulse **{score}** \u2022 {odds_part}\n"
-        f"> K/9 **{k9:.1f}** \u2022 K% **{k_pct:.0f}%** \u2022 "
+        f"> K-Pulse **{score}** \u2022 {odds_part}{bet_part}\n"
+        f"> {proj_part + ' | ' if proj_part else ''}"
+        f"K/9 **{k9:.1f}** \u2022 K% **{k_pct:.0f}%** \u2022 "
         f"Whiff **{whiff:.0f}%** \u2022 L10 avg **{avg_l10:.1f}** \u2022 Opp K-rank {opp_str}"
     )
 

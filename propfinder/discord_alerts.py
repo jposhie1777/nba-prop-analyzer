@@ -1,11 +1,10 @@
 """
-discord_alerts.py — Send HR pick alerts to Discord via bot token.
+discord_alerts.py — Send HR pick alerts to Discord.
 
 Reads today's IDEAL and FAVORABLE picks from BigQuery and sends
-rich embed messages with interactive DK/FD buttons to #hr-bets.
-
-Uses the bot token (not webhook) so interactive button components
-work for parlay building via bot.py's PickView handler.
+rich embed messages to #hr-bets. IDEAL gets full embeds; FAVORABLE
+uses compact one-line-per-player format. Parlay building is handled
+by bot.py's text-based message listener.
 """
 
 import json
@@ -230,39 +229,6 @@ def _stats_line(p):
     return " | ".join(parts)
 
 
-DK_EMOJI = {"name": "dk", "id": "1493069919766708295"}
-FD_EMOJI = {"name": "fd", "id": "1493070566809403593"}
-
-
-def _dk_fd_buttons(pick):
-    """Build interactive DK/FD button components (requires bot token, not webhook)."""
-    pick_id = f"{pick.get('batter_name', '?')}_{pick.get('game_pk', '')}"
-    buttons = []
-    buttons.append({
-        "type": 2, "style": 2,
-        "label": "DK",
-        "custom_id": f"dk:{pick_id}",
-        "emoji": DK_EMOJI,
-    })
-    buttons.append({
-        "type": 2, "style": 2,
-        "label": "FD",
-        "custom_id": f"fd:{pick_id}",
-        "emoji": FD_EMOJI,
-    })
-    return [{"type": 1, "components": buttons}]
-
-
-def _dk_fd_links(pick):
-    """Fallback markdown links when bot token not available."""
-    dk_link = _build_dk_link(pick.get("dk_outcome_code"), pick.get("dk_event_id"))
-    fd_link = _build_fd_link(pick.get("fd_market_id"), pick.get("fd_selection_id"))
-    parts = []
-    if dk_link:
-        parts.append(f"[<:dk:1493069919766708295> DK]({dk_link})")
-    if fd_link:
-        parts.append(f"[<:fd:1493070566809403593> FD]({fd_link})")
-    return " \u2022 ".join(parts)
 
 
 def _purge_channel():
@@ -384,7 +350,7 @@ def _is_weak_spot(p):
 
 
 def _pick_embed(p, color):
-    """Build a compact embed. Prefixes with target emoji if weak spot."""
+    """Build a full embed for IDEAL picks."""
     batter = p.get("batter_name", "?")
     bat = _hand_label(p.get("bat_side"))
     pitcher = p.get("pitcher_name", "?")
@@ -401,21 +367,7 @@ def _pick_embed(p, color):
         f"{_stats_line(p)}"
     )
 
-    # If no bot token, append markdown links as fallback
-    if not BOT_TOKEN:
-        links = _dk_fd_links(p)
-        if links:
-            desc += f"\n{links}"
-
     return {"description": desc, "color": color}
-
-
-def _pick_message(p, color):
-    """Build the full message payload for a pick (embed + buttons)."""
-    payload = {"embeds": [_pick_embed(p, color)]}
-    if BOT_TOKEN:
-        payload["components"] = _dk_fd_buttons(p)
-    return payload
 
 
 def send_picks_to_discord(picks):
@@ -436,30 +388,77 @@ def send_picks_to_discord(picks):
         "content": (
             f"# \u26be HR Picks \u2014 {TODAY.strftime('%b %d, %Y')}\n"
             f"**{ideal_count}** IDEAL + **{fav_count}** FAVORABLE matchups\n"
-            f"\U0001f3af = Pitcher Weak Spot (vulnerable at batter's lineup position)"
+            f"Type player names + book to build a parlay:\n"
+            f"`judge, ohtani, trout -fanduel`"
         ),
     })
     _time.sleep(0.5)
 
-    # ALL IDEAL picks
+    # ALL IDEAL picks — full embeds
     ideal_picks = [p for p in picks if p.get("grade") == "IDEAL"]
     if ideal_picks:
         _send_discord({"content": f"## \U0001f7e2 IDEAL Matchups ({len(ideal_picks)})"})
         _time.sleep(0.3)
         for p in ideal_picks:
-            _send_discord(_pick_message(p, GRADE_COLORS["IDEAL"]))
+            _send_discord({"embeds": [_pick_embed(p, GRADE_COLORS["IDEAL"])]})
             _time.sleep(0.6)
 
-    # Top 10 FAVORABLE — weak spots sorted first, then by score
+    # ALL FAVORABLE picks — compact one-line-per-player format
     fav_picks = [p for p in picks if p.get("grade") == "FAVORABLE"]
     fav_picks.sort(key=lambda p: (_is_weak_spot(p), p.get("score") or 0), reverse=True)
-    fav_top = fav_picks[:10]
 
-    if fav_top:
-        _send_discord({"content": f"## \U0001f7e1 FAVORABLE Matchups (top {len(fav_top)})"})
+    if fav_picks:
+        _send_discord({"content": f"## \U0001f7e1 FAVORABLE Matchups ({len(fav_picks)})"})
         _time.sleep(0.3)
-        for p in fav_top:
-            _send_discord(_pick_message(p, GRADE_COLORS["FAVORABLE"]))
+
+        # Build compact lines
+        lines = []
+        for p in fav_picks:
+            ws = "\U0001f3af" if _is_weak_spot(p) else ""
+            batter = p.get("batter_name", "?")
+            bat = _hand_label(p.get("bat_side"))
+            pitcher = p.get("pitcher_name", "?")
+            phand = _pitcher_hand(p.get("pitcher_hand"))
+            bt = p.get("batter_team") or ""
+            score = int(p.get("score") or 0)
+            odds = _fmt_odds(p.get("hr_odds_best_price"))
+            barrel = p.get("l15_barrel_pct")
+            iso = p.get("iso")
+            ev = p.get("l15_ev")
+            stats = []
+            if barrel is not None:
+                stats.append(f"Brl {barrel:.0f}%")
+            if iso is not None:
+                stats.append(f"ISO {iso:.3f}")
+            if ev is not None:
+                stats.append(f"EV {ev:.1f}")
+            stat_str = f" | {' '.join(stats)}" if stats else ""
+            lines.append(
+                f"{ws} **{batter}** ({bat}) {bt} vs {pitcher} ({phand}) "
+                f"\u2022 Pulse **{score}** \u2022 {odds}{stat_str}"
+            )
+
+        # Discord embeds max 4096 chars — split into batches
+        batches = []
+        current = []
+        length = 0
+        for line in lines:
+            if length + len(line) + 1 > 3900:
+                batches.append(current)
+                current = []
+                length = 0
+            current.append(line)
+            length += len(line) + 1
+        if current:
+            batches.append(current)
+
+        for batch in batches:
+            _send_discord({
+                "embeds": [{
+                    "description": "\n".join(batch),
+                    "color": GRADE_COLORS["FAVORABLE"],
+                }]
+            })
             _time.sleep(0.6)
 
 

@@ -570,6 +570,8 @@ export default function HitRateMatrixScreen() {
   const [gameCount, setGameCount] = useState("L5");
   const [selectedGameIds, setSelectedGameIds] = useState<string[]>([]);
   const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(null); // "player", "line", or a threshold like "10"
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const { data, loading, error } = useHitRateMatrix({
     category,
@@ -583,12 +585,47 @@ export default function HitRateMatrixScreen() {
     setExpandedPlayerId(null);
   }, [category, position, gameCount, selectedGameIds]);
 
-  // Filter players by selected games
+  const handleSort = useCallback((col: string) => {
+    if (sortColumn === col) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortColumn(col);
+      setSortDir("desc");
+    }
+  }, [sortColumn]);
+
+  // Filter + sort players
   const filteredPlayers = useMemo(() => {
-    if (!data?.players) return [];
-    if (selectedGameIds.length === 0) return data.players;
-    return data.players.filter((p) => selectedGameIds.includes(p.game_id));
-  }, [data?.players, selectedGameIds]);
+    let list = data?.players ?? [];
+    if (selectedGameIds.length > 0) {
+      list = list.filter((p) => selectedGameIds.includes(p.game_id));
+    }
+    if (!sortColumn) return list;
+
+    const sorted = [...list].sort((a, b) => {
+      let aVal: number;
+      let bVal: number;
+
+      if (sortColumn === "player") {
+        return sortDir === "asc"
+          ? a.player_name.localeCompare(b.player_name)
+          : b.player_name.localeCompare(a.player_name);
+      } else if (sortColumn === "line") {
+        aVal = a.line ?? 0;
+        bVal = b.line ?? 0;
+      } else {
+        // Threshold column — sort by hit rate (hit/total)
+        const aCel = a.cells[sortColumn] ?? { hit: 0, total: 0 };
+        const bCel = b.cells[sortColumn] ?? { hit: 0, total: 0 };
+        aVal = aCel.total > 0 ? aCel.hit / aCel.total : -1;
+        bVal = bCel.total > 0 ? bCel.hit / bCel.total : -1;
+      }
+
+      return sortDir === "desc" ? bVal - aVal : aVal - bVal;
+    });
+
+    return sorted;
+  }, [data?.players, selectedGameIds, sortColumn, sortDir]);
 
   const handleSave = useCallback(
     (player: HitRatePlayer) => {
@@ -723,29 +760,44 @@ export default function HitRateMatrixScreen() {
                   },
                 ]}
               >
-                <View style={tbl.playerCell}>
-                  <Text style={[tbl.headerText, { color: colors.text.secondary }]}>
-                    PLAYER
-                  </Text>
-                </View>
-                <View style={tbl.lineCell}>
-                  <Text style={[tbl.headerText, { color: colors.text.secondary }]}>
-                    LINE
-                  </Text>
-                </View>
+                <Pressable style={tbl.playerCell} onPress={() => handleSort("player")}>
+                  <View style={tbl.headerInner}>
+                    <Text style={[tbl.headerText, { color: sortColumn === "player" ? colors.accent.primary : colors.text.secondary }]}>
+                      PLAYER
+                    </Text>
+                    {sortColumn === "player" && (
+                      <Ionicons name={sortDir === "desc" ? "arrow-down" : "arrow-up"} size={10} color={colors.accent.primary} />
+                    )}
+                  </View>
+                </Pressable>
+                <Pressable style={tbl.lineCell} onPress={() => handleSort("line")}>
+                  <View style={tbl.headerInner}>
+                    <Text style={[tbl.headerText, { color: sortColumn === "line" ? colors.accent.primary : colors.text.secondary }]}>
+                      LINE
+                    </Text>
+                    {sortColumn === "line" && (
+                      <Ionicons name={sortDir === "desc" ? "arrow-down" : "arrow-up"} size={10} color={colors.accent.primary} />
+                    )}
+                  </View>
+                </Pressable>
                 <View style={tbl.sznCell}>
                   <Text style={[tbl.headerText, { color: colors.text.secondary }]}>
                     SZN MATCHUP
                   </Text>
                 </View>
                 {thresholds.map((t) => (
-                  <View key={t} style={tbl.cell}>
-                    <Text
-                      style={[tbl.headerText, { color: colors.text.secondary }]}
-                    >
-                      {t}+
-                    </Text>
-                  </View>
+                  <Pressable key={t} style={tbl.cell} onPress={() => handleSort(String(t))}>
+                    <View style={tbl.headerInner}>
+                      <Text
+                        style={[tbl.headerText, { color: sortColumn === String(t) ? colors.accent.primary : colors.text.secondary }]}
+                      >
+                        {t}+
+                      </Text>
+                      {sortColumn === String(t) && (
+                        <Ionicons name={sortDir === "desc" ? "arrow-down" : "arrow-up"} size={10} color={colors.accent.primary} />
+                      )}
+                    </View>
+                  </Pressable>
                 ))}
               </View>
 
@@ -875,6 +927,12 @@ const tbl = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
     textAlign: "center",
+  },
+  headerInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
   },
   playerCell: {
     width: PLAYER_W,

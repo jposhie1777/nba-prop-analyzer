@@ -696,6 +696,57 @@ async def startup():
         print("[STARTUP] -> ATP odds daily ingest loop started")
 
         # -----------------------------
+        # DAILY: NBA PropFinder ingest (runs at 6:00 AM ET)
+        # -----------------------------
+        async def nba_propfinder_daily_loop():
+            """
+            Daily loop that ingests NBA props, games, splits, and game logs
+            from PropFinder. Runs at 6:00 AM ET.
+            """
+            from datetime import timedelta
+            from ingest.nba_propfinder.ingest import run_daily_ingest as run_nba_pf_ingest
+
+            INGEST_HOUR = 6
+            INGEST_MINUTE = 0
+
+            print("[NBA_PROPFINDER] Daily ingest loop started")
+            print(f"[NBA_PROPFINDER] Scheduled to run at {INGEST_HOUR}:{INGEST_MINUTE:02d} AM ET")
+
+            while True:
+                try:
+                    now = datetime.now(NY_TZ)
+
+                    next_run = now.replace(
+                        hour=INGEST_HOUR,
+                        minute=INGEST_MINUTE,
+                        second=0,
+                        microsecond=0,
+                    )
+
+                    if now >= next_run:
+                        next_run = next_run + timedelta(days=1)
+
+                    wait_seconds = (next_run - now).total_seconds()
+
+                    print(f"[NBA_PROPFINDER] Next run: {next_run.strftime('%Y-%m-%d %I:%M %p ET')} ({wait_seconds/3600:.1f} hours)")
+
+                    await asyncio.sleep(wait_seconds)
+
+                    print(f"\n[NBA_PROPFINDER] ========== DAILY INGEST @ {datetime.now(NY_TZ).strftime('%I:%M %p ET')} ==========")
+
+                    result = await asyncio.to_thread(run_nba_pf_ingest)
+
+                    print(f"[NBA_PROPFINDER] Result: {result}")
+                    print(f"[NBA_PROPFINDER] Daily ingest complete\n")
+
+                except Exception as e:
+                    print(f"[NBA_PROPFINDER] ERROR in daily loop: {e}")
+                    await asyncio.sleep(3600)
+
+        asyncio.create_task(nba_propfinder_daily_loop())
+        print("[STARTUP] -> NBA PropFinder daily ingest loop started")
+
+        # -----------------------------
         # HOURLY: Pre-game Game Odds ingest (runs every hour until games start)
         # -----------------------------
         async def pregame_odds_hourly_loop():

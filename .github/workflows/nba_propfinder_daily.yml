@@ -1,0 +1,50 @@
+name: NBA PropFinder Daily Ingest
+
+on:
+  schedule:
+    # 6:00 AM ET = 10:00 AM UTC (EDT) / 11:00 AM UTC (EST)
+    - cron: "0 10 * * *"
+  workflow_dispatch:         # manual trigger from GitHub UI
+
+jobs:
+  nba-propfinder-ingest:
+    name: NBA Ingest (Props + Games + Splits + Game Logs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    env:
+      GOOGLE_CLOUD_PROJECT: graphite-flare-477419-h7
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: nba/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r nba/requirements.txt
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY || secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+
+      - name: Run NBA PropFinder ingest
+        run: |
+          cd nba
+          python ingest.py 2>&1 | tee ingest.log
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nba-ingest-logs-${{ github.run_id }}
+          path: nba/ingest.log
+          retention-days: 7

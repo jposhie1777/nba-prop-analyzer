@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Platform,
   Linking,
+  Modal,
 } from "react-native";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Stack } from "expo-router";
@@ -103,7 +104,81 @@ function calcEV(hit: number, total: number, odds: number | null): number | null 
 }
 
 /* ======================================================
-   DROPDOWN COMPONENT
+   DROPDOWN MODAL (renders options as a bottom-sheet overlay)
+====================================================== */
+function DropdownModal({
+  visible,
+  title,
+  options,
+  value,
+  onSelect,
+  onClose,
+  colors,
+}: {
+  visible: boolean;
+  title: string;
+  options: { label: string; value: string; selected?: boolean }[];
+  value?: string;
+  onSelect: (v: string) => void;
+  onClose: () => void;
+  colors: any;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable style={dd.overlay} onPress={onClose}>
+        <View
+          style={[
+            dd.modal,
+            { backgroundColor: colors.surface.elevated },
+          ]}
+        >
+          <Text style={[dd.modalTitle, { color: colors.text.primary }]}>
+            {title}
+          </Text>
+          <ScrollView style={dd.modalScroll} bounces={false}>
+            {options.map((o) => {
+              const isActive = o.selected !== undefined ? o.selected : o.value === value;
+              return (
+                <Pressable
+                  key={o.value}
+                  onPress={() => {
+                    onSelect(o.value);
+                    if (Platform.OS !== "web") Haptics.selectionAsync();
+                  }}
+                  style={[
+                    dd.modalItem,
+                    isActive && { backgroundColor: colors.accent.primary + "22" },
+                    { borderBottomColor: colors.border.subtle },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      dd.modalItemText,
+                      { color: isActive ? colors.accent.primary : colors.text.primary },
+                    ]}
+                  >
+                    {o.label}
+                  </Text>
+                  {isActive && (
+                    <Ionicons name="checkmark" size={18} color={colors.accent.primary} />
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+/* ======================================================
+   DROPDOWN BUTTON (opens modal on tap)
 ====================================================== */
 function Dropdown({
   label,
@@ -125,10 +200,7 @@ function Dropdown({
     <View style={dd.container}>
       <Text style={[dd.label, { color: colors.text.muted }]}>{label}</Text>
       <Pressable
-        onPress={() => {
-          setOpen(!open);
-          if (Platform.OS !== "web") Haptics.selectionAsync();
-        }}
+        onPress={() => setOpen(true)}
         style={[
           dd.button,
           {
@@ -140,51 +212,21 @@ function Dropdown({
         <Text style={[dd.buttonText, { color: colors.text.primary }]}>
           {selected?.label ?? value}
         </Text>
-        <Ionicons
-          name={open ? "chevron-up" : "chevron-down"}
-          size={14}
-          color={colors.text.muted}
-        />
+        <Ionicons name="chevron-down" size={14} color={colors.text.muted} />
       </Pressable>
 
-      {open && (
-        <View
-          style={[
-            dd.menu,
-            {
-              backgroundColor: colors.surface.elevated,
-              borderColor: colors.border.strong,
-            },
-          ]}
-        >
-          {options.map((o) => (
-            <Pressable
-              key={o.value}
-              onPress={() => {
-                onChange(o.value);
-                setOpen(false);
-                if (Platform.OS !== "web") Haptics.selectionAsync();
-              }}
-              style={[
-                dd.menuItem,
-                o.value === value && {
-                  backgroundColor: colors.accent.primary + "33",
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  dd.menuItemText,
-                  { color: colors.text.primary },
-                  o.value === value && { color: colors.accent.primary },
-                ]}
-              >
-                {o.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      <DropdownModal
+        visible={open}
+        title={label}
+        options={options}
+        value={value}
+        onSelect={(v) => {
+          onChange(v);
+          setOpen(false);
+        }}
+        onClose={() => setOpen(false)}
+        colors={colors}
+      />
     </View>
   );
 }
@@ -210,23 +252,29 @@ function GamesDropdown({
     : `${selectedIds.length} game${selectedIds.length !== 1 ? "s" : ""}`;
 
   const toggleGame = (id: string) => {
-    if (selectedIds.includes(id)) {
+    if (id === "__all__") {
+      onChange([]);
+    } else if (selectedIds.includes(id)) {
       onChange(selectedIds.filter((g) => g !== id));
     } else {
       onChange([...selectedIds, id]);
     }
   };
 
-  const selectAll = () => onChange([]);
+  const modalOptions = [
+    { label: "All Games", value: "__all__", selected: allSelected },
+    ...games.map((g) => ({
+      label: g.label,
+      value: g.game_id,
+      selected: selectedIds.includes(g.game_id),
+    })),
+  ];
 
   return (
     <View style={dd.container}>
       <Text style={[dd.label, { color: colors.text.muted }]}>Select Games</Text>
       <Pressable
-        onPress={() => {
-          setOpen(!open);
-          if (Platform.OS !== "web") Haptics.selectionAsync();
-        }}
+        onPress={() => setOpen(true)}
         style={[
           dd.button,
           {
@@ -238,67 +286,17 @@ function GamesDropdown({
         <Text style={[dd.buttonText, { color: colors.text.primary }]}>
           {displayText}
         </Text>
-        <Ionicons
-          name={open ? "chevron-up" : "chevron-down"}
-          size={14}
-          color={colors.text.muted}
-        />
+        <Ionicons name="chevron-down" size={14} color={colors.text.muted} />
       </Pressable>
 
-      {open && (
-        <View
-          style={[
-            dd.menu,
-            {
-              backgroundColor: colors.surface.elevated,
-              borderColor: colors.border.strong,
-            },
-          ]}
-        >
-          <Pressable
-            onPress={selectAll}
-            style={[
-              dd.menuItem,
-              allSelected && { backgroundColor: colors.accent.primary + "33" },
-            ]}
-          >
-            <Text
-              style={[
-                dd.menuItemText,
-                { color: allSelected ? colors.accent.primary : colors.text.primary },
-              ]}
-            >
-              All Games
-            </Text>
-          </Pressable>
-          {games.map((g) => {
-            const isSelected = selectedIds.includes(g.game_id);
-            return (
-              <Pressable
-                key={g.game_id}
-                onPress={() => toggleGame(g.game_id)}
-                style={[
-                  dd.menuItem,
-                  isSelected && { backgroundColor: colors.accent.primary + "33" },
-                ]}
-              >
-                <Text
-                  style={[
-                    dd.menuItemText,
-                    {
-                      color: isSelected
-                        ? colors.accent.primary
-                        : colors.text.primary,
-                    },
-                  ]}
-                >
-                  {g.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
+      <DropdownModal
+        visible={open}
+        title="Select Games"
+        options={modalOptions}
+        onSelect={toggleGame}
+        onClose={() => setOpen(false)}
+        colors={colors}
+      />
     </View>
   );
 }
@@ -788,7 +786,6 @@ export default function HitRateMatrixScreen() {
 const dd = StyleSheet.create({
   container: {
     marginRight: 12,
-    zIndex: 100,
   },
   label: {
     fontSize: 10,
@@ -812,31 +809,42 @@ const dd = StyleSheet.create({
     fontWeight: "600",
     marginRight: 8,
   },
-  menu: {
-    position: "absolute",
-    top: 52,
-    left: 0,
-    minWidth: 150,
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-    ...(Platform.OS === "web"
-      ? { boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }
-      : {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 8,
-        }),
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 32,
   },
-  menuItem: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+  modal: {
+    width: "100%",
+    maxWidth: 340,
+    borderRadius: 14,
+    paddingTop: 16,
+    paddingBottom: 8,
+    maxHeight: "70%",
   },
-  menuItemText: {
-    fontSize: 13,
-    fontWeight: "500",
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 12,
+    paddingHorizontal: 16,
+  },
+  modalScroll: {
+    maxHeight: 400,
+  },
+  modalItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  modalItemText: {
+    fontSize: 15,
+    fontWeight: "600",
   },
 });
 

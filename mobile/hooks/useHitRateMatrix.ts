@@ -36,6 +36,12 @@ export type HitRatePlayer = {
 export type GameOption = {
   game_id: string;
   label: string;
+  away_team_code?: string;
+  home_team_code?: string;
+  date?: string;
+  time?: string;
+  spread?: string;
+  total?: string;
 };
 
 export type HitRateMatrixData = {

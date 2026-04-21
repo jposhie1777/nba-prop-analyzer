@@ -184,42 +184,54 @@ def get_hit_rate_matrix(
             "stat_value": row["stat_value"],
         })
 
-    # ── 3) Fetch unique games for the games dropdown ──────────────
+    # ── 3) Fetch games with details for the dropdown ────────────────
     games_sql = f"""
-    SELECT DISTINCT
-      game_id,
-      home_team_code,
-      away_team_code
-    FROM (
-      SELECT
-        game_id,
-        team_code AS home_team_code,
-        opp_team_code AS away_team_code
-      FROM `{DATASET}.raw_nba_props`
-      WHERE run_date = (SELECT MAX(run_date) FROM `{DATASET}.raw_nba_props`)
-        AND is_home = TRUE
-      UNION DISTINCT
-      SELECT
-        game_id,
-        opp_team_code AS home_team_code,
-        team_code AS away_team_code
-      FROM `{DATASET}.raw_nba_props`
-      WHERE run_date = (SELECT MAX(run_date) FROM `{DATASET}.raw_nba_props`)
-        AND is_home = FALSE
-    )
-    ORDER BY game_id
+    SELECT
+      g.game_id,
+      g.game_date,
+      g.away_team_code,
+      g.home_team_code,
+      g.home_spread_line,
+      g.total_line
+    FROM `{DATASET}.raw_nba_games` g
+    WHERE g.run_date = (SELECT MAX(run_date) FROM `{DATASET}.raw_nba_games`)
+    ORDER BY g.game_date ASC
     """
     games_job = client.query(games_sql)
     games = []
     seen_game_ids = set()
     for r in games_job.result():
         gid = r["game_id"]
-        if gid not in seen_game_ids:
-            seen_game_ids.add(gid)
-            games.append({
-                "game_id": gid,
-                "label": f"{r['away_team_code']} @ {r['home_team_code']}",
-            })
+        if gid in seen_game_ids:
+            continue
+        seen_game_ids.add(gid)
+
+        # Format game date/time in ET
+        game_dt = r.get("game_date")
+        date_str = ""
+        time_str = ""
+        if game_dt:
+            import datetime as _dt
+            from zoneinfo import ZoneInfo
+            et = game_dt.astimezone(ZoneInfo("America/New_York"))
+            date_str = et.strftime("%-m/%d")
+            time_str = et.strftime("%-I:%M %p")
+
+        spread = r.get("home_spread_line") or ""
+        total = r.get("total_line") or ""
+        spread_str = f"{spread}" if spread else ""
+        total_str = f"O/U {total}" if total else ""
+
+        games.append({
+            "game_id": gid,
+            "away_team_code": r["away_team_code"],
+            "home_team_code": r["home_team_code"],
+            "date": date_str,
+            "time": time_str,
+            "spread": spread_str,
+            "total": total_str,
+            "label": f"{date_str} {time_str} — {r['away_team_code']} @ {r['home_team_code']}",
+        })
 
     # ── 4) Build the matrix ───────────────────────────────────────
     players = []

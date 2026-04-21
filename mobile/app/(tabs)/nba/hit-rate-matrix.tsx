@@ -22,6 +22,7 @@ import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 import {
   useHitRateMatrix,
   HitRatePlayer,
+  GameOption,
 } from "@/hooks/useHitRateMatrix";
 
 /* ======================================================
@@ -240,7 +241,7 @@ function GamesDropdown({
   onChange,
   colors,
 }: {
-  games: { game_id: string; label: string }[];
+  games: GameOption[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   colors: any;
@@ -263,11 +264,18 @@ function GamesDropdown({
 
   const modalOptions = [
     { label: "All Games", value: "__all__", selected: allSelected },
-    ...games.map((g) => ({
-      label: g.label,
-      value: g.game_id,
-      selected: selectedIds.includes(g.game_id),
-    })),
+    ...games.map((g) => {
+      const detail = g.spread && g.total ? ` (${g.spread}, ${g.total})` : "";
+      const timeLabel = g.date && g.time ? `${g.date} ${g.time}` : "";
+      const matchup = g.away_team_code && g.home_team_code
+        ? `${g.away_team_code} @ ${g.home_team_code}`
+        : g.label;
+      return {
+        label: timeLabel ? `${timeLabel}  ${matchup}${detail}` : matchup,
+        value: g.game_id,
+        selected: selectedIds.includes(g.game_id),
+      };
+    }),
   ];
 
   return (

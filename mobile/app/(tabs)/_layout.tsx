@@ -16,6 +16,7 @@ type TabConfig = {
 };
 
 const STATIC_TABS: TabConfig[] = [
+  { name: "nba", title: "NBA", icon: "basketball-outline" },
   { name: "pga", title: "PGA", icon: "golf-outline" },
   { name: "mlb", title: "MLB", icon: "baseball-outline" },
   { name: "mls", title: "MLS", icon: "football-outline" },
@@ -68,8 +69,8 @@ const HIDDEN_SCREENS = [
   "ladders",
   "live",
   "live-props-dev",
-  "nba",
   "nba/index",
+  "nba/hit-rate-matrix",
   "pga-matchups",
   "pga-compare",
   "pga-pairings",

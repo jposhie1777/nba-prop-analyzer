@@ -58,6 +58,7 @@ from routes.prop_analytics import router as prop_analytics_router
 from routes.players_routes import router as players_router
 from routes.ingest import router as ingest_router
 from routes.props import router as props_router
+from routes.hit_rate_matrix import router as hit_rate_matrix_router
 from routes.live_props_dev import router as live_props_dev_router
 from routes.live_props import router as live_props_router
 from routes.bad_line_alerts import router as bad_line_alerts_router
@@ -170,6 +171,7 @@ app.include_router(prop_analytics_router)
 app.include_router(players_router)
 app.include_router(ingest_router)
 app.include_router(props_router)
+app.include_router(hit_rate_matrix_router)
 app.include_router(live_props_dev_router)
 app.include_router(live_props_router)
 app.include_router(bad_line_alerts_router)

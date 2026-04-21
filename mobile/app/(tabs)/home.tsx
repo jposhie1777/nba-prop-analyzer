@@ -41,6 +41,7 @@ export default function Home() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.headline}>Leagues</Text>
 
+      <LeagueCard title="NBA" route="/(tabs)/nba" logo={LEAGUE_LOGOS.NBA} />
       <LeagueCard title="PGA" route="/(tabs)/pga" logo={LEAGUE_LOGOS.PGA} />
       <LeagueCard title="MLB" route="/(tabs)/mlb" logo={LEAGUE_LOGOS.MLB} />
       <LeagueCard title="MLS" route="/(tabs)/mls" logo={LEAGUE_LOGOS.MLS} />

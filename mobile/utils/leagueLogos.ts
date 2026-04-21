@@ -1,5 +1,6 @@
 // utils/leagueLogos.ts
 export const LEAGUE_LOGOS: Record<string, string> = {
+  NBA: "https://a.espncdn.com/i/teamlogos/leagues/500/nba.png",
   PGA: "https://img.icons8.com/ios-filled/100/ffffff/golf.png",
   MLB: "https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png",
   ATP: "https://img.icons8.com/ios-filled/100/ffffff/tennis.png",

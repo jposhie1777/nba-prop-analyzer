@@ -118,6 +118,12 @@ export default function NbaHome() {
       </Text>
 
       <Tile
+        title="Hit Rate Matrix"
+        subtitle="Player performance vs statistical milestones"
+        onPress={() => router.push("/(tabs)/nba/hit-rate-matrix" as any)}
+      />
+
+      <Tile
         title="Player Season Averages"
         subtitle="Points, rebounds, assists & more"
         onPress={() => router.push("/(tabs)/more/player-season-averages")}

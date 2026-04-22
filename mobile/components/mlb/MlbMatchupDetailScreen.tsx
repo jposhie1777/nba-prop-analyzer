@@ -9,6 +9,7 @@ import { BackToHomeButton } from "@/components/navigation/BackToHomeButton";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { buildParlayLinks, getBuildPlatform, type ParlayBatterInput } from "@/utils/parlayBuilder";
+import { LastUpdatedBadge } from "./LastUpdatedBadge";
 
 type StatValue = number | string | null | undefined;
 
@@ -349,7 +350,7 @@ const { colors } = useTheme();
 const router = useRouter();
 const params = useLocalSearchParams<{ gamePk?: string; awayTeam?: string; homeTeam?: string }>();
 const gamePk = Number(params.gamePk);
-const { data, loading, error, refetch } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
+const { data, loading, error, refetch, refreshedAt, cacheSource } = useMlbMatchupDetail(Number.isFinite(gamePk) ? gamePk : null);
 const { data: boData } = useMlbBattingOrder(Number.isFinite(gamePk) ? gamePk : null);
 
 // Build weak spot lookup: pitcher_id -> Set of player_ids in weak spots
@@ -582,6 +583,7 @@ return (
         </Text>
       </View>
     </View>
+    <LastUpdatedBadge refreshedAt={refreshedAt} cacheSource={cacheSource} />
   </View>
 
   {loading ? <ActivityIndicator color="#93C5FD" /> : null}

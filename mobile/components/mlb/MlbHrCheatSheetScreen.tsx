@@ -25,6 +25,7 @@ import { buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
 import { formatET } from "@/lib/time/formatET";
 import { HrMatchupGameContent } from "./MlbHrMatchupScreen";
+import { LastUpdatedBadge } from "./LastUpdatedBadge";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -575,7 +576,7 @@ function HrMatchupGamePanel({
 
 function HrMatchupsAllGames() {
   const { colors } = useTheme();
-  const { data: games, loading, error, refetch } = useMlbUpcomingGames();
+  const { data: games, loading, error, refetch, refreshedAt, cacheSource } = useMlbUpcomingGames();
   const platform = getBuildPlatform();
 
   const slipItems = usePropBetslip((s) => s.items);
@@ -651,6 +652,7 @@ function HrMatchupsAllGames() {
           <Text style={st.sub}>
             Tap a game to expand its matchup data. Each pitcher shows batter stats filtered by pitch type.
           </Text>
+          <LastUpdatedBadge refreshedAt={refreshedAt} cacheSource={cacheSource} />
         </View>
 
         {loading ? <ActivityIndicator color="#93C5FD" /> : null}

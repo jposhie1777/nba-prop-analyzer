@@ -7,6 +7,8 @@ type QueryResult<T> = {
   loading: boolean;
   error: string | null;
   refetch: () => void;
+  refreshedAt: string | null;
+  cacheSource: string | null;
 };
 
 type Params = Record<
@@ -76,6 +78,8 @@ export function useEplQuery<T>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
+  const [cacheSource, setCacheSource] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
 
@@ -119,9 +123,18 @@ export function useEplQuery<T>(
             lastError = new Error(`Non-JSON response from ${url}`);
             continue;
           }
+          const headerRefreshedAt = res.headers.get("x-pulse-cache-refreshed-at");
+          const headerCacheSource = res.headers.get("x-pulse-cache-source");
           const json = await res.json();
           if (!controller.signal.aborted && mountedRef.current) {
             setData(json);
+            // Prefer body-embedded _cache (cheat-sheet style) over header.
+            const bodyCache =
+              json && typeof json === "object" && !Array.isArray(json)
+                ? (json as { _cache?: { refreshed_at?: string; source?: string } })._cache
+                : null;
+            setRefreshedAt(bodyCache?.refreshed_at ?? headerRefreshedAt ?? null);
+            setCacheSource(bodyCache?.source ?? headerCacheSource ?? null);
           }
           return;
         } catch (err) {
@@ -167,5 +180,5 @@ export function useEplQuery<T>(
     };
   }, [fetchData]);
 
-  return { data, loading, error, refetch: fetchData };
+  return { data, loading, error, refetch: fetchData, refreshedAt, cacheSource };
 }

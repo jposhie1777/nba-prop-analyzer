@@ -8,6 +8,7 @@ import { getMlbTeamLogo } from "@/utils/mlbLogos";
 import { usePropBetslip } from "@/store/usePropBetslip";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { getBuildPlatform } from "@/utils/parlayBuilder";
+import { LastUpdatedBadge } from "./LastUpdatedBadge";
 
 // ── Formatters ──────────────────────────────────────────────────────────────
 
@@ -105,7 +106,7 @@ export function MlbPitchingPropsScreen() {
     awayTeam?: string;
   }>();
   const gamePk = rawGamePk ? Number(rawGamePk) : null;
-  const { data, loading, error, refetch } = useMlbPitchingProps(gamePk);
+  const { data, loading, error, refetch, refreshedAt, cacheSource } = useMlbPitchingProps(gamePk);
   const { colors } = useTheme();
   const router = useRouter();
   const platform = useMemo(() => getBuildPlatform(), []);
@@ -250,6 +251,7 @@ export function MlbPitchingPropsScreen() {
             </Text>
           </View>
         </View>
+        <LastUpdatedBadge refreshedAt={refreshedAt} cacheSource={cacheSource} />
       </View>
 
       {loading ? <ActivityIndicator color="#93C5FD" /> : null}

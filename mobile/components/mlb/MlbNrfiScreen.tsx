@@ -17,6 +17,7 @@ import { useUserSettings, FD_STATES } from "@/store/useUserSettings";
 import { buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
 import { getMlbTeamLogo } from "@/utils/mlbLogos";
 import { formatET } from "@/lib/time/formatET";
+import { LastUpdatedBadge } from "./LastUpdatedBadge";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -205,7 +206,7 @@ export function MlbNrfiScreen() {
   const setFdState = useUserSettings((s) => s.setFdState);
   const hydrate = useUserSettings((s) => s.hydrate);
   const hydrated = useUserSettings((s) => s._hydrated);
-  const { data, loading, error, refetch } = useMlbNrfi(fdState);
+  const { data, loading, error, refetch, refreshedAt, cacheSource } = useMlbNrfi(fdState);
   const platform = getBuildPlatform();
   const [showStatePicker, setShowStatePicker] = useState(false);
 
@@ -355,6 +356,7 @@ export function MlbNrfiScreen() {
           {matchups.length > 0 ? (
             <Text style={st.countText}>{matchups.length} matchups today</Text>
           ) : null}
+          <LastUpdatedBadge refreshedAt={refreshedAt} cacheSource={cacheSource} />
         </View>
 
         {loading ? <ActivityIndicator color="#93C5FD" /> : null}

@@ -15,6 +15,14 @@
       "dest": "/$1"
     },
     {
+      "src": "^/api/mlb/matchups/([0-9]+)$",
+      "dest": "/api/mlb/matchups/detail?game_pk=$1"
+    },
+    {
+      "src": "^/api/mlb/matchups/([0-9]+)/pitching-props$",
+      "dest": "/api/mlb/matchups/pitching-props?game_pk=$1"
+    },
+    {
       "handle": "filesystem"
     },
     {

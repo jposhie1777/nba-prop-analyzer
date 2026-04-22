@@ -1427,8 +1427,8 @@ def mlb_matchups_upcoming_debug():
 # matches them first instead of trying to parse "cheat-sheet"/"nrfi" as int.
 
 @router.get("/mlb/matchups/cheat-sheet")
-def _cheat_sheet_route():
-    return mlb_hr_cheat_sheet()
+def _cheat_sheet_route(_refresh: bool = Query(False)):
+    return mlb_hr_cheat_sheet(bypass_cache=_refresh)
 
 
 @router.get("/mlb/matchups/cheat-sheet/batter-detail")
@@ -2502,16 +2502,17 @@ def _grade_bucket(grade: Optional[str]) -> str:
     return "C"
 
 
-def mlb_hr_cheat_sheet():
+def mlb_hr_cheat_sheet(bypass_cache: bool = False):
     """
     Returns all HR picks for today across ALL games, grouped by letter grade.
     Each batter includes game context (teams, start time, venue) so the frontend
     can organize by game within each grade section.
     """
     cache_key = "cheat-sheet"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
+    if not bypass_cache:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
 
     client = get_bq_client()
     today = _today_et_iso()

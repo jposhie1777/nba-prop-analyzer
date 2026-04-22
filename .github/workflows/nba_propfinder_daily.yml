@@ -41,6 +41,13 @@ jobs:
           cd nba
           python ingest.py 2>&1 | tee ingest.log
 
+      - name: Warm Neon cache
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          pip install psycopg2-binary requests
+          python scripts/warm_nba_cache.py
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4

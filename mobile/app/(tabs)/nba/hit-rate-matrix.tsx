@@ -565,9 +565,9 @@ function ExpandedRow({
 }
 
 /* ======================================================
-   MAIN SCREEN
+   MAIN CONTENT (reusable inside NBA tab switcher)
 ====================================================== */
-export default function HitRateMatrixScreen() {
+export function HitRateMatrixContent({ showStackHeader = false }: { showStackHeader?: boolean } = {}) {
   const { colors } = useTheme();
   const { add: addToBetslip } = usePropBetslip();
   const { open: openBetslip } = useBetslipDrawer();
@@ -675,26 +675,7 @@ export default function HitRateMatrixScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.screen }]}>
-      <Stack.Screen options={{ headerShown: false }} />
-
-      {/* ── HEADER ──────────────────────────────────── */}
-      <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: colors.surface.card,
-            borderBottomColor: colors.border.subtle,
-          },
-        ]}
-      >
-        <Text style={[styles.title, { color: colors.text.primary }]}>
-          NBA Hit Rate Matrix
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.text.muted }]}>
-          Track player performance against key statistical milestones and find
-          betting opportunities
-        </Text>
-      </View>
+      {showStackHeader ? <Stack.Screen options={{ headerShown: false }} /> : null}
 
       {/* ── FILTERS ─────────────────────────────────── */}
       <View style={styles.filtersWrapper}>
@@ -838,6 +819,13 @@ export default function HitRateMatrixScreen() {
       <PropBetslipDrawer />
     </View>
   );
+}
+
+/* ======================================================
+   ROUTE WRAPPER (when visited via /nba/hit-rate-matrix path)
+====================================================== */
+export default function HitRateMatrixScreen() {
+  return <HitRateMatrixContent showStackHeader />;
 }
 
 /* ======================================================

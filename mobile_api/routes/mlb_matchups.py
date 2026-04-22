@@ -1304,11 +1304,13 @@ def _resolve_latest_run_date(
 @router.get("/mlb/matchups/upcoming")
 def mlb_matchups_upcoming(
     limit: int = Query(default=20, ge=1, le=100),
+    _refresh: bool = Query(default=False),
 ):
     cache_key = f"upcoming:{limit}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
+    if not _refresh:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
 
     schedule_rows = _fetch_schedule_for_today()
     if not schedule_rows:

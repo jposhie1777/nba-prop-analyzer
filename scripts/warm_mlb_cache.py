@@ -16,6 +16,7 @@ import json
 import os
 import sys
 from datetime import datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import psycopg2
@@ -26,9 +27,10 @@ CLOUD_RUN_BASE_URL = os.environ.get(
     "https://mobile-api-763243624328.us-central1.run.app",
 )
 
-ENDPOINTS: list[tuple[str, str]] = [
-    # (endpoint_path, params_hash)
-    ("/mlb/matchups/cheat-sheet", "none"),
+ENDPOINTS: list[tuple[str, str, str]] = [
+    # (endpoint_path, params_hash, extra_query_string)
+    ("/mlb/matchups/cheat-sheet", "none", ""),
+    ("/mlb/matchups/upcoming", "none", "limit=30"),
 ]
 
 UPSERT_SQL = """
@@ -43,15 +45,16 @@ def today_et() -> str:
     return datetime.now(ZoneInfo("America/New_York")).date().isoformat()
 
 
-def fetch(endpoint: str) -> dict:
-    url = f"{CLOUD_RUN_BASE_URL}{endpoint}?_refresh=1"
+def fetch(endpoint: str, extra_qs: str = "") -> Any:
+    qs = f"{extra_qs}&_refresh=1" if extra_qs else "_refresh=1"
+    url = f"{CLOUD_RUN_BASE_URL}{endpoint}?{qs}"
     print(f"GET  {url}")
     r = requests.get(url, timeout=60)
     r.raise_for_status()
     return r.json()
 
 
-def upsert(conn, endpoint: str, params_hash: str, payload: dict) -> None:
+def upsert(conn, endpoint: str, params_hash: str, payload: Any) -> None:
     cache_date = today_et()
     with conn.cursor() as cur:
         cur.execute(
@@ -71,9 +74,9 @@ def main() -> int:
     conn = psycopg2.connect(dsn)
     try:
         failures = 0
-        for endpoint, params_hash in ENDPOINTS:
+        for endpoint, params_hash, extra_qs in ENDPOINTS:
             try:
-                payload = fetch(endpoint)
+                payload = fetch(endpoint, extra_qs)
                 upsert(conn, endpoint, params_hash, payload)
             except Exception as exc:
                 failures += 1

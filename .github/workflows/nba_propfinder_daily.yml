@@ -37,6 +37,9 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY || secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
 
       - name: Run NBA PropFinder ingest
+        env:
+          PROPFINDER_EMAIL: ${{ secrets.PROPFINDER_EMAIL }}
+          PROPFINDER_PASSWORD: ${{ secrets.PROPFINDER_PASSWORD }}
         run: |
           cd nba
           python ingest.py 2>&1 | tee ingest.log

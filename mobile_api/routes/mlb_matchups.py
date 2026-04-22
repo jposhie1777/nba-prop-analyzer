@@ -1449,16 +1449,21 @@ def _cheat_sheet_batch_detail_route(body: Dict[str, Any] = Body(...)):
 
 
 @router.get("/mlb/matchups/nrfi")
-def _nrfi_route(state: str = "nj"):
-    return mlb_nrfi_matchups(state=state)
+def _nrfi_route(state: str = "nj", _refresh: bool = Query(default=False)):
+    return mlb_nrfi_matchups(state=state, bypass_cache=_refresh)
 
 
 @router.get("/mlb/matchups/{game_pk}")
-def mlb_matchup_detail(game_pk: int, season: int = Query(default=2026, ge=2025, le=2026)):
+def mlb_matchup_detail(
+    game_pk: int,
+    season: int = Query(default=2026, ge=2025, le=2026),
+    _refresh: bool = Query(default=False),
+):
     cache_key = f"matchup:{game_pk}:s{season}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
+    if not _refresh:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
 
     client = get_bq_client()
     today = _today_et_iso()
@@ -1972,15 +1977,16 @@ def _fetch_k_props_live(game_pk: int) -> List[Dict[str, Any]]:
 
 
 @router.get("/mlb/matchups/{game_pk}/pitching-props")
-def mlb_pitching_props(game_pk: int):
+def mlb_pitching_props(game_pk: int, _refresh: bool = Query(default=False)):
     """
     Returns pitching K prop grades for a game.
     Combines BQ signal data with live sportsbook lines + deep links.
     """
     cache_key = f"kprops:{game_pk}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
+    if not _refresh:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
 
     client = get_bq_client()
     today = _today_et_iso()
@@ -3196,7 +3202,7 @@ def _format_nrfi_team(team: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def mlb_nrfi_matchups(state: str = "nj"):
+def mlb_nrfi_matchups(state: str = "nj", bypass_cache: bool = False):
     """
     Returns today's NRFI/YRFI matchup data from propfinder,
     enriched with FanDuel market/selection IDs and odds,
@@ -3204,9 +3210,10 @@ def mlb_nrfi_matchups(state: str = "nj"):
     """
     st = (state or "nj").lower().strip()
     cache_key = f"nrfi-matchups:{st}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
+    if not bypass_cache:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
 
     # Fetch propfinder NRFI data and FanDuel events in parallel
     with ThreadPoolExecutor(max_workers=2) as pool:

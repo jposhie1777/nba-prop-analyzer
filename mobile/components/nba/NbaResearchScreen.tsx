@@ -20,7 +20,6 @@ import * as Haptics from "expo-haptics";
 import { useTheme } from "@/store/useTheme";
 import { useBetslipDrawer } from "@/store/useBetslipDrawer";
 import { usePropBetslip, PropSlipItem } from "@/store/usePropBetslip";
-import { PropBetslipDrawer } from "@/components/prop/PropBetslipDrawer";
 import { LastUpdatedBadge } from "@/components/mlb/LastUpdatedBadge";
 import { TEAM_LOGOS } from "@/utils/teamLogos";
 import {
@@ -724,6 +723,38 @@ function NumberField({
 }
 
 /* ======================================================
+   PLAYER HEADSHOT
+====================================================== */
+function PlayerHeadshot({
+  playerId,
+  size = 36,
+  mutedColor,
+}: {
+  playerId: string | null | undefined;
+  size?: number;
+  mutedColor: string;
+}) {
+  const [errored, setErrored] = useState(false);
+  const id = (playerId ?? "").trim();
+
+  if (!id || errored) {
+    return <Ionicons name="person-circle" size={size - 2} color={mutedColor} />;
+  }
+  return (
+    <Image
+      source={{ uri: `https://cdn.nba.com/headshots/nba/latest/260x190/${id}.png` }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: "rgba(148,163,184,0.18)",
+      }}
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
+/* ======================================================
    PLAYER ROW (IMG_0460)
 ====================================================== */
 function PropRow({
@@ -766,7 +797,7 @@ function PropRow({
       {/* Top row: avatar | name/meta | PFR | odds */}
       <View style={row.top}>
         <View style={row.avatar}>
-          <Ionicons name="person-circle" size={34} color={colors.text.muted} />
+          <PlayerHeadshot playerId={prop.player_id} size={36} mutedColor={colors.text.muted} />
         </View>
         <View style={row.nameCol}>
           <View style={row.nameRow}>
@@ -1236,7 +1267,6 @@ export function NbaResearchScreen() {
         colors={colors}
       />
 
-      <PropBetslipDrawer />
     </View>
   );
 }

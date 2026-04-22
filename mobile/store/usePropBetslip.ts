@@ -20,8 +20,10 @@ export type PropSlipItem = {
   bookmaker?: string | null;
   dk_event_id?: string | null;
   dk_outcome_code?: string | null;
+  dk_odds?: number | null;
   fd_market_id?: string | null;
   fd_selection_id?: string | null;
+  fd_odds?: number | null;
 };
 
 

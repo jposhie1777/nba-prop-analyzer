@@ -17,7 +17,13 @@ import { usePropBetslip } from "@/store/usePropBetslip";
 import { useParlayTracker } from "@/store/useParlayTracker";
 import { useUserSettings } from "@/store/useUserSettings";
 import { normalizeMarket } from "@/utils/normalizeMarket";
-import { buildParlayLinks, buildFanDuelParlay, getBuildPlatform } from "@/utils/parlayBuilder";
+import {
+  buildParlayLinks,
+  buildFanDuelParlay,
+  buildDraftKingsParlay,
+  calculateParlayOdds,
+  getBuildPlatform,
+} from "@/utils/parlayBuilder";
 
 const GAMBLY_URL = "https://www.gambly.com/gambly-bot";
 
@@ -123,6 +129,44 @@ export function PropBetslipDrawer() {
       platform
     );
   }, [mlbHrItems, platform]);
+
+  // ── NBA parlay ──
+  const nbaItems = useMemo(
+    () => items.filter((item) => item.sport === "nba"),
+    [items]
+  );
+
+  const nbaParlayLinks = useMemo(() => {
+    if (nbaItems.length < 1) {
+      return { draftkings: null, fanduel: null, dkOdds: null, fdOdds: null };
+    }
+    const draftkings = buildDraftKingsParlay(
+      nbaItems.map((item) => ({
+        dk_outcome_code: item.dk_outcome_code ?? null,
+        dk_event_id: item.dk_event_id ?? null,
+      })),
+      platform
+    );
+    const fanduel = buildFanDuelParlay(
+      nbaItems.map((item) => ({
+        fd_market_id: item.fd_market_id ?? null,
+        fd_selection_id: item.fd_selection_id ?? null,
+      })),
+      platform,
+      fdState
+    );
+    const dkOdds = calculateParlayOdds(
+      nbaItems
+        .map((item) => item.dk_odds)
+        .filter((value): value is number => Number.isFinite(value as number))
+    );
+    const fdOdds = calculateParlayOdds(
+      nbaItems
+        .map((item) => item.fd_odds)
+        .filter((value): value is number => Number.isFinite(value as number))
+    );
+    return { draftkings, fanduel, dkOdds, fdOdds };
+  }, [nbaItems, platform, fdState]);
 
   // ── PGA parlay ──
   const pgaItems = useMemo(
@@ -450,6 +494,56 @@ export function PropBetslipDrawer() {
               ]}
             >
               <Text style={styles.sportsbookBtnText}>Open FD Parlay</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {nbaItems.length >= 1 ? (
+        <View style={styles.sportsbookWrap}>
+          <Text style={styles.sportsbookTitle}>
+            NBA {nbaItems.length >= 2 ? "Parlay" : "Bet"} Links ({nbaItems.length} leg{nbaItems.length !== 1 ? "s" : ""})
+          </Text>
+          <Text style={styles.sportsbookSub}>
+            DK:{" "}
+            {nbaParlayLinks.dkOdds == null
+              ? "—"
+              : nbaParlayLinks.dkOdds > 0
+              ? `+${nbaParlayLinks.dkOdds}`
+              : nbaParlayLinks.dkOdds}
+            {"  ·  "}FD:{" "}
+            {nbaParlayLinks.fdOdds == null
+              ? "—"
+              : nbaParlayLinks.fdOdds > 0
+              ? `+${nbaParlayLinks.fdOdds}`
+              : nbaParlayLinks.fdOdds}
+          </Text>
+          <View style={styles.sportsbookRow}>
+            <Pressable
+              onPress={() => openLink(nbaParlayLinks.draftkings)}
+              disabled={!nbaParlayLinks.draftkings}
+              style={[
+                styles.sportsbookBtn,
+                { backgroundColor: "#3B7D3C", borderColor: "#3B7D3C" },
+                !nbaParlayLinks.draftkings && styles.sportsbookBtnDisabled,
+              ]}
+            >
+              <Text style={styles.sportsbookBtnText}>
+                Open DraftKings{nbaItems.length >= 2 ? " Parlay" : ""}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => openLink(nbaParlayLinks.fanduel)}
+              disabled={!nbaParlayLinks.fanduel}
+              style={[
+                styles.sportsbookBtn,
+                { backgroundColor: "#1A5276", borderColor: "#1A5276" },
+                !nbaParlayLinks.fanduel && styles.sportsbookBtnDisabled,
+              ]}
+            >
+              <Text style={styles.sportsbookBtnText}>
+                Open FanDuel{nbaItems.length >= 2 ? " Parlay" : ""}
+              </Text>
             </Pressable>
           </View>
         </View>

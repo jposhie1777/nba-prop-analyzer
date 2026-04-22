@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -790,7 +789,8 @@ function PropRow({
               <Pressable
                 onPress={(e) => {
                   e.stopPropagation?.();
-                  if (prop.dk_deep_link) Linking.openURL(prop.dk_deep_link);
+                  onAddToBetslip(prop, "DraftKings");
+                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 }}
                 style={[row.oddsBtn, { backgroundColor: "rgba(59,125,60,0.25)", borderColor: "#3B7D3C" }]}
               >
@@ -802,7 +802,8 @@ function PropRow({
               <Pressable
                 onPress={(e) => {
                   e.stopPropagation?.();
-                  if (prop.fd_deep_link) Linking.openURL(prop.fd_deep_link);
+                  onAddToBetslip(prop, "FanDuel");
+                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 }}
                 style={[row.oddsBtn, { backgroundColor: "rgba(26,82,118,0.3)", borderColor: "#1A5276" }]}
               >
@@ -1087,19 +1088,22 @@ export function NbaResearchScreen() {
       const isDK = book === "DraftKings";
       const side = (prop.over_under || "over").toLowerCase() as "over" | "under";
       const item: PropSlipItem = {
-        id: `nba-research-${prop.prop_id}-${book}`,
+        id: `nba-research-${prop.prop_id}`,
         player_id: Number(prop.player_id) || 0,
         player: prop.player_name,
         market,
         side,
         line: prop.line ?? 0,
-        odds: (isDK ? prop.dk_price : prop.fd_price) ?? 0,
+        odds: (isDK ? prop.dk_price : prop.fd_price) ?? prop.best_price ?? 0,
         matchup: `${prop.team_code ?? ""} vs ${prop.opp_team_code ?? ""}`,
+        sport: "nba",
         bookmaker: book,
         dk_event_id: prop.dk_event_id ?? undefined,
         dk_outcome_code: prop.dk_outcome_code ?? undefined,
+        dk_odds: prop.dk_price ?? undefined,
         fd_market_id: prop.fd_market_id ?? undefined,
         fd_selection_id: prop.fd_selection_id ?? undefined,
+        fd_odds: prop.fd_price ?? undefined,
       };
       addToBetslip(item);
       openBetslip();

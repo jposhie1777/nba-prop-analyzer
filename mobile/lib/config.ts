@@ -36,10 +36,11 @@ function normalizeApiBase(url: string): string {
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
 }
 
-const rawApiBase =
-  EXTRA_API_URL ??
-  process.env.EXPO_PUBLIC_API_URL ??
-  DEFAULT_API_BASE;
+// On web, always route through Vercel's /api so edge functions (Neon cache)
+// are tried before the Cloud Run fallback. Native builds hit Cloud Run directly.
+const rawApiBase = IS_WEB
+  ? "/api"
+  : (EXTRA_API_URL ?? process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_BASE);
 
 export const API_BASE = normalizeApiBase(rawApiBase);
 

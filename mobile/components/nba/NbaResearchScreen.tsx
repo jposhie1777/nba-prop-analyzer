@@ -1,6 +1,7 @@
 // components/nba/NbaResearchScreen.tsx
 import {
   ActivityIndicator,
+  FlatList,
   Image,
   Linking,
   Modal,
@@ -1135,42 +1136,44 @@ export function NbaResearchScreen() {
       </View>
 
       {/* Sort chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipsRow}
-      >
-        {SORT_CHIPS.map((chip) => {
-          const isActive = sortKey === chip.key;
-          return (
-            <Pressable
-              key={chip.key}
-              onPress={() => handleSortChipPress(chip.key)}
-              style={[
-                styles.chip,
-                isActive && { backgroundColor: "#A855F7", borderColor: "#A855F7" },
-                !isActive && { borderColor: colors.border.subtle, backgroundColor: colors.surface.elevated },
-              ]}
-            >
-              <Text
+      <View style={styles.chipsWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsRow}
+        >
+          {SORT_CHIPS.map((chip) => {
+            const isActive = sortKey === chip.key;
+            return (
+              <Pressable
+                key={chip.key}
+                onPress={() => handleSortChipPress(chip.key)}
                 style={[
-                  styles.chipText,
-                  { color: isActive ? "#fff" : colors.text.primary },
+                  styles.chip,
+                  isActive && { backgroundColor: "#A855F7", borderColor: "#A855F7" },
+                  !isActive && { borderColor: colors.border.subtle, backgroundColor: colors.surface.elevated },
                 ]}
               >
-                {chip.label}
-              </Text>
-              {isActive && (
-                <Ionicons
-                  name={filters.sortDir === "desc" ? "arrow-down" : "arrow-up"}
-                  size={12}
-                  color="#fff"
-                />
-              )}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+                <Text
+                  style={[
+                    styles.chipText,
+                    { color: isActive ? "#fff" : colors.text.primary },
+                  ]}
+                >
+                  {chip.label}
+                </Text>
+                {isActive && (
+                  <Ionicons
+                    name={filters.sortDir === "desc" ? "arrow-down" : "arrow-up"}
+                    size={12}
+                    color="#fff"
+                  />
+                )}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {loading ? (
         <View style={styles.center}>
@@ -1190,18 +1193,27 @@ export function NbaResearchScreen() {
           <Text style={[styles.dim, { color: colors.text.muted }]}>No props match the current filters.</Text>
         </View>
       ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
-          {filteredProps.map((p) => (
+        <FlatList
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          data={filteredProps}
+          keyExtractor={(p) => p.prop_id}
+          initialNumToRender={15}
+          maxToRenderPerBatch={15}
+          windowSize={9}
+          removeClippedSubviews={Platform.OS !== "web"}
+          renderItem={({ item: p }) => (
             <PropRow
-              key={p.prop_id}
               prop={p}
               expanded={expandedPropId === p.prop_id}
-              onToggle={() => setExpandedPropId((cur) => (cur === p.prop_id ? null : p.prop_id))}
+              onToggle={() =>
+                setExpandedPropId((cur) => (cur === p.prop_id ? null : p.prop_id))
+              }
               onAddToBetslip={handleAddToBetslip}
               colors={colors}
             />
-          ))}
-        </ScrollView>
+          )}
+        />
       )}
 
       <FiltersModal
@@ -1261,19 +1273,27 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   filterBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  chipsWrap: {
+    height: 48,
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   chipsRow: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     gap: 8,
+    alignItems: "center",
   },
   chip: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "center",
     gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
+    height: 32,
   },
   chipText: { fontSize: 12, fontWeight: "700" },
   center: {

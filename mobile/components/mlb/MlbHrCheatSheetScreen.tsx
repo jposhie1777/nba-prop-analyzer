@@ -50,6 +50,20 @@ function handLabel(side?: string | null): string {
   return "RHB";
 }
 
+function formatRefreshed(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }) + " ET";
+}
+
 type GradeKey = "A+" | "A" | "B" | "C" | "D";
 
 const GRADE_CONFIG: Record<GradeKey, { label: string; border: string; bg: string; text: string }> = {
@@ -911,6 +925,11 @@ function CheatSheetContent() {
               })}
             </View>
           ) : null}
+          {formatRefreshed(data?._cache?.refreshed_at) ? (
+            <Text style={st.lastUpdated}>
+              Last updated {formatRefreshed(data?._cache?.refreshed_at)}
+            </Text>
+          ) : null}
         </View>
 
         {/* Game selector */}
@@ -1083,6 +1102,7 @@ const st = StyleSheet.create({
   h1: { color: "#E9F2FF", fontSize: 22, fontWeight: "800", marginTop: 4 },
   sub: { color: "#A7C0E8", fontSize: 12, lineHeight: 17 },
   countsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
+  lastUpdated: { color: "#6B7FA0", fontSize: 11, marginTop: 8, fontStyle: "italic" },
   countPill: {
     borderWidth: 1,
     borderRadius: 999,

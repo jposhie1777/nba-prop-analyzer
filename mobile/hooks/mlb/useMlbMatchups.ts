@@ -539,6 +539,11 @@ export type MlbHrCheatSheet = {
     C: number;
     D: number;
   };
+  _cache?: {
+    source: "neon" | "cloud-run-fallback";
+    refreshed_at?: string;
+    ms?: number;
+  };
 };
 
 export function useMlbHrCheatSheet() {

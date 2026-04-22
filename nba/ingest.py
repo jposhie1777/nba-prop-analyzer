@@ -88,13 +88,31 @@ def authenticate():
 
 
 def _write_bq(table_name, rows):
+    """
+    Load rows via a BQ load job (not streaming).
+
+    Streaming inserts (insert_rows_json) park rows in the streaming buffer for
+    up to 90 min, during which DELETE/UPDATE against those rows fails. Load
+    jobs write straight to table storage so the daily DELETE-then-reload flow
+    is safe to run.
+    """
     if not rows:
         log.info(f"  {table_name}: 0 rows, skipping")
         return
     table_ref = f"{PROJECT}.{DATASET}.{table_name}"
-    errors = bq.insert_rows_json(table_ref, rows)
-    if errors:
-        log.error(f"  BQ insert errors for {table_name}: {errors[:3]}")
+    job_config = bigquery.LoadJobConfig(
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        schema_update_options=[],
+    )
+    load_job = bq.load_table_from_json(rows, table_ref, job_config=job_config)
+    try:
+        load_job.result()
+    except Exception as e:
+        log.error(f"  BQ load job failed for {table_name}: {e}")
+        if load_job.errors:
+            log.error(f"  Details: {load_job.errors[:3]}")
+        return
     else:
         log.info(f"  {table_name}: {len(rows)} rows written")
 
@@ -139,9 +157,22 @@ def _parse_fd_link(link):
 
 # ── Delete today's rows before re-ingesting ──────────────────────────────────
 def _clear_today(table_name):
+    """
+    DELETE rows for today so a re-run doesn't duplicate. If the table contains
+    rows stuck in the streaming buffer from earlier runs (90 min window), the
+    DELETE raises. We log and continue — duplicates from that one re-run are
+    easier to tolerate than the whole job failing, and subsequent runs load
+    via non-streaming jobs so the error self-heals.
+    """
     sql = f"DELETE FROM {tbl(table_name)} WHERE run_date = '{TODAY}'"
-    bq.query(sql).result()
-    log.info(f"  Cleared {table_name} for {TODAY}")
+    try:
+        bq.query(sql).result()
+        log.info(f"  Cleared {table_name} for {TODAY}")
+    except Exception as e:
+        log.warning(
+            f"  DELETE on {table_name} failed (likely streaming-buffer lock): {e}. "
+            "Continuing; may produce duplicates for today."
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

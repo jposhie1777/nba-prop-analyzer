@@ -277,8 +277,8 @@ def _purge_k_channel():
 def send_to_discord(embeds):
     """Send embeds to Discord webhook.
 
-    Only the first batch triggers a push notification — every subsequent batch
-    gets SUPPRESS_NOTIFICATIONS (flags=4096) so one run = one ping.
+    Every batch posts with SUPPRESS_NOTIFICATIONS (flags=4096) — the
+    consolidated summary in summary_alert.py is the only ping per run.
     """
     if not WEBHOOK_URL:
         log.warning("No Discord K webhook URL configured")
@@ -287,9 +287,7 @@ def send_to_discord(embeds):
     # Discord allows max 10 embeds per message — split if needed
     for i in range(0, len(embeds), 10):
         batch = embeds[i:i + 10]
-        body = {"embeds": batch}
-        if i > 0:
-            body["flags"] = 4096  # SUPPRESS_NOTIFICATIONS
+        body = {"embeds": batch, "flags": 4096}  # SUPPRESS_NOTIFICATIONS
         payload = json.dumps(body).encode("utf-8")
         req = Request(
             WEBHOOK_URL,

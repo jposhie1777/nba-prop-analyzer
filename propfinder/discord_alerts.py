@@ -399,7 +399,7 @@ def send_picks_to_discord(picks):
             f"Type player names + book to build a parlay:\n"
             f"`judge, ohtani, trout -fanduel`"
         ),
-    }, silent=False)
+    })
     _time.sleep(0.5)
 
     # ALL IDEAL picks — full embeds

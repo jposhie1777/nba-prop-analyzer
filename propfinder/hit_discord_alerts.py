@@ -281,7 +281,7 @@ def send_picks_to_discord(picks):
             f"**{len(fire)}** FIRE + **{len(strong)}** STRONG + **{len(lean)}** LEAN matchups\n"
             f"\U0001f3af = Pitcher Weak Spot (vulnerable at batter's lineup position)"
         ),
-    }, silent=False)
+    })
     _time.sleep(0.5)
 
     # FIRE picks — all

@@ -183,6 +183,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         help="Skip hit_analytics.py (hit learning loop).",
     )
     parser.add_argument(
+        "--skip-summary",
+        action="store_true",
+        help="Skip summary_alert.py (the consolidated summary post).",
+    )
+    parser.add_argument(
         "--lock-file",
         default=os.getenv("PROPFINDER_LOCK_FILE", "/tmp/propfinder_workflow.lock"),
         help="Path for lock file used to avoid overlapping runs.",
@@ -231,6 +236,12 @@ def main(argv: List[str] | None = None) -> int:
                     _log(f"{pipe_name} pipeline failed at {step_name} — skipping rest of {pipe_name}")
                     any_failure = code
                     break
+
+        # Consolidated summary post — always runs (even after a pipeline failure)
+        # so partial picks still produce one ping.
+        if not args.skip_summary:
+            _log("--- Summary ---")
+            _run_step("summary_alert", "summary_alert.py")
     finally:
         try:
             fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)

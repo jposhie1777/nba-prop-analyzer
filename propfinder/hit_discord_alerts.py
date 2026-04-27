@@ -219,13 +219,21 @@ def _purge_channel():
     log.info("Purged %s messages from hit channel", total_deleted)
 
 
-def _send_discord(payload):
-    """Send a message to Discord via bot token."""
+def _send_discord(payload, silent=True):
+    """Send a message to Discord via bot token.
+
+    silent=True adds the SUPPRESS_NOTIFICATIONS flag (1 << 12) so the message
+    posts without triggering a push notification. Only the run-header message
+    should pass silent=False — that way each run produces exactly one ping.
+    """
     import time as _time
 
     if not BOT_TOKEN:
         log.warning("No Discord bot token configured for hit alerts")
         return
+
+    if silent:
+        payload = {**payload, "flags": (payload.get("flags", 0) | 4096)}
 
     url = f"{DISCORD_API}/channels/{HIT_CHANNEL_ID}/messages"
     headers = {
@@ -273,7 +281,7 @@ def send_picks_to_discord(picks):
             f"**{len(fire)}** FIRE + **{len(strong)}** STRONG + **{len(lean)}** LEAN matchups\n"
             f"\U0001f3af = Pitcher Weak Spot (vulnerable at batter's lineup position)"
         ),
-    })
+    }, silent=False)
     _time.sleep(0.5)
 
     # FIRE picks — all

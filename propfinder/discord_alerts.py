@@ -303,9 +303,17 @@ def _purge_channel():
     log.info("Purged %s messages from HR channel", total_deleted)
 
 
-def _send_discord(payload):
-    """Send a message to Discord. Uses bot token if available, webhook as fallback."""
+def _send_discord(payload, silent=True):
+    """Send a message to Discord. Uses bot token if available, webhook as fallback.
+
+    silent=True adds the SUPPRESS_NOTIFICATIONS flag (1 << 12) so the message
+    posts without triggering a push notification. Only the run-header message
+    should pass silent=False — that way each run produces exactly one ping.
+    """
     import time as _time
+
+    if silent:
+        payload = {**payload, "flags": (payload.get("flags", 0) | 4096)}
 
     if BOT_TOKEN:
         url = f"{DISCORD_API}/channels/{CHANNEL_ID}/messages"
@@ -391,7 +399,7 @@ def send_picks_to_discord(picks):
             f"Type player names + book to build a parlay:\n"
             f"`judge, ohtani, trout -fanduel`"
         ),
-    })
+    }, silent=False)
     _time.sleep(0.5)
 
     # ALL IDEAL picks — full embeds
